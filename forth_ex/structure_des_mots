@@ -1,0 +1,90 @@
+
+.DB     "rot1",0x4,1<<EXEC  nom du mot rot1, longueur du nom, type de mot
+.DW	link                link variable compile qui pointe sur le mot preccedent
+rot1:                       label
+.SET link=rot1              la variable reevalue pour pointe sur le label rot1
+	ld	r2,-X       instructions qui vont etre execute lors de l'appel rot1
+	ld	r3,-X
+	ld	r4,-X
+	st	X+,r3
+	st	X+,r2
+	st	X+,r4
+	ret                  fin du mot qui se termine par return
+	
+.DB     " rot",0x3,1<<EXEC   rot ayant une longueur impaire il faut mettre un espace avant pour l'alignement 
+.DW	link
+rot:
+.SET link=rot               si cette ligne est supprime rot ne sera plus visible avec vlist
+	ld	r2,-X
+	ld	r3,-X
+	ld	r4,-X
+	ld	r5,-X
+	ld	r6,-X
+	ld	r7,-X
+	st	X+,r5
+	st	X+,r4
+	st	X+,r3
+	st	X+,r2
+	st	X+,r7
+	st	X+,r6
+	ret
+Les mots nouveaux peuvent etre intercales entre d'autres mots, s'ils sont places apres le label unforget ils
+pourront etre efface par forget et aussi avant le label end_of_dict sinon il seront ecrasses lors de l'ecriture
+de la flash avec arvterm
+(X=R27:R26, Y=R29:R28 and Z=R31:R30) X pointe sur la pile de donnees Z en mode compilation pointe sur la flash
+: t if S" vrai" then ;
+: tt if S" faux" else S" vrai" then ;
+flash
+002940-0014A0 07 08 95 14 0E 94 8F 06  9A 14 0C 94 80 14 01 74   �  ��  ��  t
+002950-0014A8 01 08 A2 14 11 F4 0C 94  B3 14 0E 94 62 01 76 72   �  � ��  �b vr
+
+002960-0014B0 61 69 00 7F 00 00 08 95  74 74 02 08 AA 14 11 F0 ai    �tt  �  
+002970-0014B8 0C 94 C1 14 0E 94 62 01  66 61 75 78 00 8F 0C 94  ��  �b faux �
+002980-0014C0 C7 14 0E 94 62 01 76 72  61 69 00 64 00 00 08 95 �  �b vrai d   �
+002990-0014C8 FF FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF ����������������
+
+14A7  01 74 01 0        " t",0x1,1<<exec
+14A9  14A2               adresse du mot precedent
+14AA  11 F4              breq then
+14AB  0C 94 B3 14        jmp  fin_then
+then:
+14AD  0E 94 62 01        call S"
+14AF  61 69 00 7F 76 72  vrai/00,7F seul le zero est significatif, fin de chaine
+14B2  00 00              nop ; inutile en vue d'ecrire edit
+fin_then:
+14B3  08 95              ret
+--------------------------------------
+14B4  74 74 02 08        "tt",0x2,1<<exec
+14B6  14 11              14AA adresse de "t"
+14B7  11 F0              brne  else
+14B8  0C 94 C1 14        jmp then
+else:
+14BA  0E 94 62 01        call S"
+14BC  66 61 75 78 00 8F  faux/00,8F
+14CF  0C 94 C7 14        jmp fin_then
+14C1  0E 94 62 01   4    call S"
+14C3  76 72  61 69 00 6  vrai/00,08
+14C6  00 00              nop ; inutile en vue d'ecrire edit
+fin_then:
+14C7  08 95              ret
+
+________________________________________
+
+: ttt ST 2780 begin 1- /? until St ; # 32ms environ pour ttt de 10.000 boucles
+
+flash
+002960-0014B0 8F 06 A7 14 0C 94 8D 14  03 74 74 74 03 08 AF 14 �  ��  ttt  � 
+002970-0014B8 0E 94 B6 13 0E 94 8F 06  80 27 00 20 0E 94 1A 0F  ��  ��'   �  
+002980-0014C0 0E 94 EF 0C 11 F4 0C 94  BE 14 0E 94 C2 13 08 95  ��  � ��  ��  �
+002990-0014C8 FF FF FF FF FF FF FF FF  FF FF FF FF FF FF FF FF ����������������
+
+14B8    call ST # initiatialise la tempo avrterm
+14BA    call num2 2780 #mettre 0x2780 sur la pile de donnees
+14BD    label begin est en un "and r0,r0" sans signification choisi pour ecrire edit par la suite
+begin:
+14BE    call 1- # decremente de 1 la donnee sur la pile
+14C0    call /? # test vrai si la donnee sur la pile est zero, "/?" nouveau mot de la derniere version
+14C2    breq    fin_begin
+14C3    jmp     begin
+14C5    call    St  # affiche le temps ecoule sur le terminal ayant lancer avrterm
+14C7    return

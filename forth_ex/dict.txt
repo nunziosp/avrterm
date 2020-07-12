@@ -1,0 +1,288 @@
+1	vect_int	13D0
+        En cliquant sur le bouton list de avrtem, ce fichier list.txt est cree 
+                        (sans les commentaires) 
+        
+        Les tests ont ete realise sur arduino nano avec une horloge de 16 Mhz, si la frequene est differente 
+          il faut modifier .EQU F_CPU=16000000 dans macro.h
+          
+                        J'utilise le fichier demo.fth que je charge avec avrterm
+                        Il faut selectionner le fichier avec le bouton "Select File" puis sur le bouton à gauche
+                        du bouton "Select File" apparrait le nom du fichier cliquer dessus pour charger le fichier
+
+2	St.	13D0             "St." affiche des donnees sous forme de tableau sur avrterm
+                                  ex: ": vect_int 30 drop1 0 readflash z1 0 St. ;" affiche la table des interruptions
+                                  
+3	St	13AC             "St" affiche le temps ecoule, l'initialisation se fait avec "ST" et laffichage
+4	ST	13A0               se fait sur le terminal ayant lancer avrterm
+
+5	SH.	1394             "SH." prend 32 bits sur la pile de donnees et l'affiche dans avrterm sous
+                                    forme hexadecimal
+6	Sh.	1387             "Sh." prend 16 bits sur la pile de donnees et l'affiche dans avrterm sous
+                                    forme hexadecimal
+7	Sb.	137A             "Sb." prend 16 bits sur la pile de donnees et l'affiche dans avrterm sous
+                                    forme binaire
+8	SB.	136D             "SB." prend 32 bits sur la pile de donnees et l'affiche dans avrterm sous
+                                    forme binaire
+9	Sd.	1360             "Sd." prend 16 bits sur la pile de donnees et l'affiche dans avrterm sous
+                                    forme decimal
+10	SD.	1353             "SD." prend 32 bits sur la pile de donnees et l'affiche dans avrterm sous
+                                    forme decimal
+11	LF	1344             "LF" saut de ligne sur avrterm
+------------------------------------------------------------------------------------------------------------
+
+                        A partir d'ici tous les mots sont écrit en assembleur est charger avec USBASP
+    
+12	forget	12F1             "forget" permet d'effacer des mots ex: "forget minute" efface tout les mots
+                                    jusqu'a "minute" inclus, forget ne peut pas effacer des mots apres lui-même
+                                
+13	restore	12CD             lors de l'usage de forget pour supprimer des mots ayant fait usage de "allot"
+                                    il n'est pas possible de récuper la ram reserver par "allot".
+                                    Avec "restore" la ram est recupéré et le systèm revient à l'état comme après
+                                    programmation par USBASP
+                                    
+14	start	12A3             "start nom", "nom" est execute apres un reset si pin2 est a l'état high (portd 2)          
+
+15	pin3	129A              test portd,3
+16	pin2	1292              test portd,2
+
+17	i2_out	1282
+18	freq_out	1242
+19	recurse	122F             "recurse" remplace dans le mot en cours de compilation par lui-même
+
+20	sei	1227             valide les interruptions
+21	cli	1221             interdit les interruptions
+
+22	freq	11ED
+
+23	compile	11A2             "compile nom" force la compilation de nom s'il n'est pas compilable
+
+24	]	117D             Permet en mode compilation d'executer les mots jusqu'a "]" et revient
+25	[	1169                 en mode compilation
+
+26	code	112C
+27	icode	1125
+
+28	debug	110E             Execute "flash", "dp", "sp", "eep" et "ram" utile pour resoudre les bugs
+
+29	D.	10CD             Deplace 4 octets du dessus de la pile de donnees vers LCD en tant que nbre
+                                    non signé
+30	.	1097             Deplace 2 octets du dessus de la pile de donnees vers LCD en tant que nbre
+                     
+31	c.	1067             Deplace 1 octet du dessus de la pile de donnees vers LCD en tant que nbre
+                    
+32	eep	101A             Affiche sous forme de tableau les 64 premiers octets de l'eeprom
+                                    dans avrterm (adr,...)=>(....)
+33	ram	FDE              Affiche sous forme de tableau les 64 a partir de adresse 0x100 octets
+                                    de la ram    dans avrterm       (adr,...)=>(....)
+34	sp	FA2              Affiche sous forme de tableau les 64 premiers octets de la pile de retour
+                                    dans avrterm
+35	dp	F68              Affiche sous forme de tableau les 64 derniers octetsla pile de donnees
+                                    dans avrterm 
+36	flash	F17              Affiche sous forme de tableau les 256 derniers octetsla ecrit dans la flash
+                                    dans avrterm 
+                   
+37	2-	F0C              Soustrait 2 au nbre (2 octets) du dessus de la pile donnée 
+38	2+	F03              Ajoute 2 au nbre (2 octets) du dessus de la pile donnée
+39	1-	EFA              Soustrait 1 au nbre (2 octets) du dessus de la pile donnée
+40	1+	EF1              Ajoute 1 au nbre (2 octets) du dessus de la pile donnée
+
+41	setd7	EEC              mettre à 1 le bit 7 du port D
+42	setd6	EE5              mettre à 1 le bit 6 du port D
+43	clrd7	EDE              mettre à 0 le bit 7 du port D
+44	clrd6	ED7              mettre à 0 le bit 6 du port D
+45	in_d	ECD              lire le port D sous forme d'un entier dans low_int, high_int=0, ((portd,0)....)
+
+46	cbits	EAD              "n cbits" efface le nieme bit du premier entier (16 bits) de la pile de donnees
+                                    un "and 0xF" avant l'operation
+47	sbits	E8D              "n sbits" set du nieme bit du premier entier (16 bits) de la pile de donnees
+                                    un "and 0xF" avant l'operation
+48	tbits	E75              "n tbits" test le nieme bit du premier entier (16 bits) de la pile de donnees
+                                    un "and 0xF" avant l'operation
+49	togc	E6B              "togc" change le flag carry
+50	togz	E62              "togz" change le flag zero
+51	clrz	E5C              "clrz" efface le flag zero
+52	setz	E56              "setz" set le flag zero
+53	clrc	E50              "clrc" efface le flag carry
+54	setc	E4A              "setc" change le flag zero
+55	carry	E42              "carry" positionne le flag zero en fonction du flag carry
+56	c>>	E32
+57	<<c	E23
+58	>>	E13
+59	<<	E04
+60	not	DFA              Complement du premier entier de la pile de donnees
+61	xor	DED              "xor" ou exclusif (A,B....)=>(R....)
+62	and	DE0              "and" A and B (A,B....)=>(R....)
+63	or	DD3              "or"  A or B (A,B....)=>(R....)
+
+64	mod	DC7              "mod" A/B reste de la division des deux premiers entiers (A,B...)=>(mod....)
+65	/	DBF              "/" A/B resultat de la division des deux premiers entiers (A,B...)=>(R....)
+66	/mod	D9D              "/mod" A/B plus le reste (A,B...)=>(R,mod....)
+
+67	*	D8C              "
+68	*D	D71
+69	-	D65
+70	+	D59
+71	>=	D49
+72	<=	D39
+73	>	D29
+74	<	D19
+75	0<>	D12
+76	<>	D02
+77	0=	CF7
+78	=	CE8
+79	?	CDF              "?" test le premier entier de la pile de donnes et positionne le flag zero
+80	c?	CD8              "c?" test le premier octet de la pile de donnes et positionne le flag zero
+
+81	r@	CCA              "r@" lit le premier entier de la pile de retour (x,...y) => (x,y,....y)
+82	r!	CBA              "r!" ecrase le premier entier de la pile de retour (x,y....a,b)=>(x,y....y,b)
+83	<r	CAE              "<r" deplace le premier entier de la pile de retour (y,....a,b)=>(y,a....b)
+84	>r	CA2              ">r" deplace vers la pile de retour (x,y....a)=>(x,....y,a)
+
+85	J	C88              "J" indexe de la boucle "do loop" de niveau 2
+86	I	C7A              "I" indexe d'un boucle "do loop"
+                                    ex: " : test 5 1 do 3 1 do I J * Sd. loop loop ; "
+                                    
+87	leave	C6A              "leave" permet de forcer la sortie dans une boucle "do" "loop"
+88	repeat	C42              "repeat" s'utilise sous la forme "while conditon do instructions repeat"
+89	while	C18              "while" ex: ": test begin ? while LF dup Sd. 1- repeat ; "
+                                 "4 test" affiche de 4 à 1 sur avrterm
+90	until	BF4              "until" test pour boucle avec "begin"
+91	again	BD4              "again" boucle infini avec "begin"
+92	begin	BBA              "begin" de boucle
+                                    ex: ": test  9 begin 1- dup Sd. 3 over = until drop ;"
+                                    
+93	else	B86              "else" s'utilise avec "if" lors d'un test non reussi, facultatif
+94	then	B60              "then" s'utilise avec "if" lors d'un test reussi, obligatoire avec "if"
+95	if	B44              "if" teste le flag zero, format " condition if faux else vrai then"
+                                    ex: ": test 5 = if S" faux" else S" vrai" then ;" "4 test" "5 test" "6 test"
+                                    
+96	loop	B06              "loop" 
+97	do	ADE              ex: ": test 50 100 1 do dup Sh. LF 1+ loop drop ;"
+
+98	here	AD4              "here" met sur la pile de donnees l'adresse des 2 premiers octets libres de la flash
+                                    une adresse flash pointe sur 2 octets
+99	DP	ACB
+100	,	AB6              "," ecrire un entier 2 octets dans le premier espace libre de la memoire flash
+101	c,	A97              "C," BUG EN ATTENTE DE CORRECTION ou pas vu d'une adresse flash pointe sur
+                                  2 octets et la plus petite instruction machine est de 2 octets
+                                  
+102	@	A8D              "@" lit un entier n dans la memoire ram a l'adresse adr (adr,...)=>(n,....) 
+103	c@	A83              "c@" lit un octet n dans la memoire ram a l'adresse adr (adr,...)=>((n,0),....) 
+104	!	A79              "!" ecrit un entier n dans la memoire ram a l'adresse adr (n,adr,...)=>(....)
+105	c!	A70              "c!" ecrit la partie low d'un entier dans la ram ((low,high),adr...)=>(....)
+
+106	roll1	A5B              "3 roll1" est equivalent à "rot1" 
+107	roll	A40              "3 roll" est equivalent à "rot" (a,b,c,d,e...) "5 roll" (b,c,d,e,a...)
+108	pick1	A31              "2 pick1" est equivalent à "over1" 
+109	pick	A1D              "2 pick" est equivalent à "over"  (a,b,c,d,e...) "4 pick" (a,b,c,d,e,b...)
+
+110	rot	A0C              "hex 1111 2222 3333 4444" (1111,2222,3333,4444....) "rot" (1111,3333,4444,2222...)
+111	rot1	A01              "rot1" (1111,3333,4422,2244......)
+112	over	9F2              (a,b...) "over" (a,b,a...)
+113     over1	9E8              ((low1,high1),(low2,high2)....) "over1" ((x,low1),(high1,low2),(high2,low2)...)
+114	drop	9E0              (a,b,c...) "drop" (a,b...)
+115	drop1	9DA              ((low1,high1),(low2,high2)....) "drop1" ((x,low1),(high1,low2)...)
+116	swap	9CC              (a,b,c...) "swap" (a,c,b...)
+117	swap1	9C3              
+118	dup	9B7
+119	dup1	9AF
+120	z1	9A8              ((low1,high1),(low2,high2)....) => ((high1,low2),(high2,0)....) ajoute un zero l'octet high dans la pile de donnes
+
+121	allot	966              "n allot" reserve n octets de ram
+122	var	957              "var nom" creation d'une variable "nom" de 2 octets
+                                    "nom" renvoie l'adresse de la variable.
+                                    "nom @" lit la variable "nom" et "n nom !" ecrire n dans la variable "nom"
+                      
+123	does	906              "does" s'utilise avec "definer"
+124	definer	8DC              "definer" cree un mot qui peut creer des mot d'un type defini entre "does"
+                                    l'execution de ses types de mot est defini entre "does" et ";"
+                                    ex: "definer var4 4 allot does ;" "var4 vtmp", dans ce cas l'execution de
+                                    "vtmp" renvoie l'adresse des 4 octets reserves par "allot"
+                                    ex: "definer rot rot cbi 7 and swap 1F and 3 << + 9A00 + , does execute ;"
+                                    "25 7 cbi cport7" 25 étant l'adresse du port B "cport7" provoque la mise à zero
+                                    du bit 7 du port B
+                                    
+125	;	8B0              ";" fin de déclaration d'un mot et debut de la compilation
+126	:	78F              ":" declaration de mot, ex: ": hello S" hello the world" ;", l'execution de "hello"
+                                    provoque l'affichage de "hello the world" sur avrterm
+                                    ": salut lcd_clr lcd_home ." salut les terriens" ;" l'execution de "salut"
+                                    provoque l'effacement de l'afficheur lcd, le positionnement du curseur au debut
+                                     et l'affichage de "salut les terriens" sur lcd.
+                                     les mots définis par ":" sont compilable et executable.
+127	:I	778              ":I" est du meme usage que ":" sauf les mots crees sont uniquement execute
+                                    meme en mode compilation il ne sont qu'executes
+                                    
+128	readflash	768      "readflash" lit n octets de la memoire flash ((n,adr....) =>(data,n....)
+                                    
+                                    
+129	deci	75C              "deci" mode decimal
+130	hex	753              "deci" mode hexadecimal, ABCDEF en majuscule devienne des chiffres
+
+131	readeep	736               "readeep" lit n octets de l'eeprom (n,adr....)=>(data,n....)
+132	writeep	714               "writeep" ecrit n octets de l'eeprom (data,n,adr....)=>(....)
+133	writeram	701       "writeram" ecrit n octets de l'eeprom (data,n,adr....)=>(....)
+134	readram	6E8
+135	break	6DF
+136	execute	6D5
+137	base	6CA
+138	adrw	6BB
+139	query	6A1              "query" ex: "query vlist" va chercher "vlist" est mettre son adresse dans la
+                                   pile de donnees. "query" attend qu'une donnees lui soit envoye. Pour la recherche 
+                                   "find" est execute si elle echoue "number est execute, un nouvel echec
+                                   renvoie le contenu de wordbuf vers l'entree de avrterm
+                                   
+140	num2	68F              Ne pas utiliser
+141	num6	67C              Ne pas utiliser, lorsque un nombre par exemple 1234 est compile call num2 1234
+                                 est produit. ex: 12345678 est compile call num6 12345678 , cette fonction sert 
+                                 a mettre le nombre qui suit call numx dans la pile de donnees
+
+142	number	5FB              "number" controle si wordbuf contient un nombre, si oui le nombre est place
+                                    dans la pile de donnee et l'adresse 0x676 qui pointe sur un return, si non 0x546
+                                    est place dans la pile de donnees, cette adresse est une fonction qui renvoie le 
+                                    contenu de wordbuf vers l'entree de avrterm
+                                    
+143	find	5B7              "find" analyse wordbuf afin de retourner l'adresse du mot forth ou erreur (0x546)
+
+144	vlist	58E              "vlist" affiche sur avrterm les mots du dictionnaire forth
+
+145	word	566              "word" stocke les donnees recu dans wordbuf
+
+146	receive	504              "receive" envoie les donnees recus dans wordbuf et renvoie au buffer d'entree
+                                    de avrterm si incorrecte
+
+147	twi_r	4C9
+148	twi_s	490
+
+149	led	42D
+
+150	delay	414              "n delay" temps d'attente de n fois 100 µs
+
+151	."	3D1              |Ensemble de commande qui gerent un afficheur lcd 4x40 via I2C
+152	lcd_clr	3B3              |
+153	lcd_home	399      |
+154	dispcom0	37E      |
+155	display	36F              |
+156	sendlcd	353              |
+157	lcd_gotoxy	330      |
+158	lcd_com	30C              |
+159	emit	2E2              |
+160	lcd_init	1C0      |
+
+161	r_adcn	1AF              mesure analogique adc0 at tiny84
+162	adcn	19F              associe avec pwm2 permet convertir une tension donne par adcn
+163	pwm2	18F              tester uniquement sur at tiny84 sur adc0
+
+164	S"	13F              affiche sur le terminal avrterm, mot seulement compilable
+
+165	com0	134              envoi un octet de pile de donnee ((low,high)....) =>((low,)....)
+
+166	rflag0	128              rflag0 teste si une donnee a été recu et positionne le bit Z 
+                    
+167	rcom0	119              reception port serie (.........n) n=(low,high) avec high=0
+
+168	send0	108              emission port serie de n donnee (data,n....)
+
+169	recv0	F1               reception port serie de n donnee (n....data,n) => (data,n....)
+170	
+OK
+	546

@@ -1,0 +1,5689 @@
+
+AVRA   Ver. 1.3.0 avr328forth.s Sun Mar  8 09:22:50 2020
+
+
+         ;/*
+          ;* ----------------------------------------------------------------------------
+         ; *  avrforth.c
+          ;* Auteur : Nunzio Spitaleri 
+         ; * 
+          ;*
+          ;* ----------------------------------------------------------------------------
+          ;*/
+         ;#define __AVR_ATmega328__
+         ;#include <avr/io.h>
+         ;#include "project.h
+          .LIST
+         ;***********************************************************************;
+         ; data segmùent
+         ;***********************************************************************; 
+          .DSEG
+          .LIST
+          .ORG $100 
+         	; decompte pour delay
+D:000100    lastword:	.BYTE 2	;last word
+D:000102    dict:		.BYTE 2
+D:000104    free_ram:	.BYTE 2	
+D:000106    DP_save:	.BYTE 2	
+D:000108    stack_save:	.BYTE 2	
+D:00010a    newword:	.BYTE 2
+D:00010c    newdict:	.BYTE 2
+D:00010e    base:		.BYTE 1
+D:00010f    etat:		.BYTE 1
+D:000110    type_find:	.BYTE 1
+D:000111    save_z:		.BYTE 2
+D:000113    curs_screen:	.BYTE 1
+D:000114    curs_buf:	.BYTE 1
+          .EQU	t_inbuf=10
+D:000115    inbuf:		.BYTE	t_inbuf
+          .EQU	t_wordbuf=41
+D:00011f    wordbuf:	.BYTE	t_wordbuf
+          tabram_end:
+         ;***********************************************************************;
+         ; Interruptions
+         ;***********************************************************************; 
+          .CSEG
+          .ORG 0
+         
+C:000000 940c 0075 jmp	Reset
+          ;Reset Handler
+C:000002 940c 0034 jmp Ext_int0_vect
+          ;IRQ0 Handler
+C:000004 940c 0034 jmp Ext_int1_vect
+          ;IRQ1 Handler
+C:000006 940c 0034 jmp Pc_int0_vect
+          ;IRQ0 Handler
+C:000008 940c 0034 jmp Pc_int1_vect
+          ;IRQ1 Handler
+C:00000a 940c 0034 jmp Pc_int2_vect
+          ;IRQ2 Handler
+C:00000c 940c 0034 jmp Wdt_int_vect
+          ;IRQ2 Handler
+C:00000e 940c 0034 jmp Tim2_compA_vect
+          ;Timer2 Compare Handler
+C:000010 940c 0034 jmp Tim2_compB_vect
+          ;Timer2 Compare Handler
+C:000012 940c 0034 jmp Tim2_ovf_vect
+          ;Timer2 Overflow Handler
+C:000014 940c 0034 jmp Tim1_capt_vect
+          ;Timer1 Capture Handler
+C:000016 940c 0034 jmp Tim1_compA_vect
+          ;Timer1 CompareA Handler
+C:000018 940c 0034 jmp Tim1_compB_vect
+          ;Timer1 CompareB Handler
+C:00001a 940c 0034 jmp Tim1_ovf_vect
+          ;Timer1 Overflow Handler
+C:00001c 940c 0037 jmp Tim0_compA_vect
+          ;Timer0 Compare Handler
+C:00001e 940c 0037 jmp Tim0_compB_vect
+          ;Timer0 Compare Handler
+C:000020 940c 0037 jmp Tim0_ovf_vect
+          ;Timer0 Overflow Handler
+C:000022 940c 0037 jmp Spi_stc_vect
+          ;SPI Transfer Complete Handler
+C:000024 940c 0037 jmp Usart_rx_vect
+          ;Usart RX Com_vectplete Handler
+C:000026 940c 0037 jmp Usart_udr_vect
+          ;UDR Empty Handler
+C:000028 940c 0037 jmp Usart_tx_vect
+          ;Usart TX Complete Handler
+C:00002a 940c 0054 jmp Adc_complete_vect
+          ;Adc Conversion Complete Handler
+C:00002c 940c 0054 jmp Ee_rdy_vect
+          ;EEPROM Ready Handler
+C:00002e 940c 0037 jmp Ana_comp_vect
+          ;Analog Comparator Handler
+C:000030 940c 0054 jmp Twi_int_vect
+          ;Two-wire Serial Interface Handler
+C:000032 940c 0054 jmp Spm_rdy_vect
+          ;Store Program Memory Ready Handler
+         ;***********************************************************************; 
+         ;Interruptions non utilisées
+         ;***********************************************************************;
+          Ext_int0_vect:
+          ;IRQ0
+          Ext_int1_vect:
+          ;IRQ1
+          Pc_int0_vect:
+          ;IRQ0
+          Pc_int1_vect:
+          ;IRQ1
+          Pc_int2_vect:
+          ;IRQ2
+          Wdt_int_vect:
+          ;IRQ2 Handler
+          Tim2_compA_vect:
+          ;Timer2 Comparaison
+          Tim2_compB_vect:
+          ;Timer2 Comparaison
+          Tim2_ovf_vect:
+          ;Timer2 Overflow
+          Tim1_capt_vect:
+          ;Timer1 Capture
+          Tim1_compA_vect:
+          ;Timer1 CompareA
+          Tim1_compB_vect:
+          ;Timer1 CompareB
+          Tim1_ovf_vect:
+C:000034 9601      	adiw	r25:r24,1
+C:000035 98b0      	cbi	TIFR1,TOV1
+C:000036 9518      	reti
+          ;Timer1 Overflow
+          Tim0_compA_vect:
+          ;Timer0 Compare
+          Tim0_compB_vect:
+          ;Timer0 Compare
+          Tim0_ovf_vect:
+          ;Timer0 Overflow
+          Spi_stc_vect:
+          ;SPI Transfer Complete Handler
+          Usart_rx_vect:
+          ;Usart RX Complete
+          Usart_udr_vect:
+          ;UDR Empty
+          Usart_tx_vect:
+          ;Usart TX Complete
+          Ana_comp_vect: ;Analog Comparator
+C:000037 b6cf      	in	r12,SREG
+C:000038 94f8      	cli
+C:000039 9100 00b3 	lds	r16,OCR2A
+C:00003b 9110 0030 	lds	r17,ACSR
+C:00003d fd10      	sbrc	r17,ACIS0
+C:00003e c007      	rjmp	Ana_comp_vect1
+C:00003f 6010      	sbr	r17,ACIS0
+C:000040 9310 0030 	sts	ACSR,r17
+C:000042 3f0f      	cpi	r16,0xFF
+C:000043 f051      	breq	Ana_comp_vect2
+C:000044 94d3      	inc	r13
+C:000045 c008      	rjmp	Ana_comp_vect2
+          Ana_comp_vect1:
+C:000046 9110 0030 	lds	r17,ACSR
+C:000048 7f1f      	cbr	r17,ACIS0
+C:000049 9310 0030 	sts	ACSR,r17
+C:00004b 28dd      	or	r13,r13
+C:00004c f3c9      	breq	Ana_comp_vect1
+C:00004d 94da      	dec	r13
+          Ana_comp_vect2:
+C:00004e 92d0 00b3 	sts	OCR2A,r13
+C:000050 9478      	sei
+C:000051 92c0 003f 	sts	SREG,r12
+C:000053 9518      	reti
+         	
+          Adc_complete_vect:
+          ;Adc Conversion Complète
+          Ee_rdy_vect:
+          ;EEPROM Ready
+          Twi_int_vect:
+          ;Two-wire Serial Interface Handler 
+          Spm_rdy_vect:
+          ;Store Program Memory Ready
+C:000054 9518      	reti
+          ;Fin de l’interruption
+         
+          .SET link=0
+          nunzio:		.DB	0x10,"Nunzio Spitaleri "
+C:000055 104E756E7A696F2053706974616C65726920
+          Sysname:	.DB	0x10,"  Avrforth v0.1  "
+C:00005E 102020417672666F7274682076302E312020
+          error_return:	.DB	0x0A," erreur SP "
+C:000067 0A2065727265757220535020
+          Send_compile:		.DB	0x08," compile "
+C:00006D 0820636F6D70696C6520
+          Send_code:		.DB	0x05,"code "
+C:000072 05636F646520
+         	
+          Reset:
+C:000075 94f8      	Cli
+C:000076 e008      	ldi	r16,HIGH(RAMEND) ; set stack register
+C:000077 bf0e      	out	SPH,r16
+C:000078 ef0f      	ldi	r16,LOW(RAMEND)
+C:000079 bf0d      	out	SPL,r16
+C:00007a ef0f      	ldi	r16,0xFF
+C:00007b 940e 009a 	call	Initport
+C:00007d 940e 0407 	call	Init_delay
+         	;call	Init_twi
+         	;call	testlcd
+         	;call	lcd_init
+C:00007f 940e 00dc 	call	Usart0_init
+         	;call	Spi_init
+C:000081 940e 017f 	call	Init_pwm2
+C:000083 940e 0194 	call	Init_adc
+          Reset01:
+C:000085 940e 00ac 	call 	InitForth
+         	;call 	Vlist
+         	;call	Usart1_init
+         	;ldi	r16,0x05
+         	;call	lcd_gotoxy1
+         	;ldi	ZL, LOW(Sysname)
+         	;ldi	ZH, HIGH(Sysname)
+         	;st	X+,ZL
+         	;st	X+,ZH
+         	;call 	Sendlcd
+         	;ldi	r16,0x14
+         	;call	lcd_gotoxy1
+         	;ldi	ZL, LOW(nunzio)
+         	;ldi	ZH, HIGH(nunzio)
+         	;st	X+,ZL
+         	;st	X+,ZH
+         	;call 	Sendlcd
+C:000087 940e 12c8 	call	Start2
+C:000089   +  	ENV0_R16	0x4F
+C:000089 e40f      ldi	r16,low(0x4F) 
+C:00008a 940e 0135 call	Com0_1
+C:00008c   +  	ENV0_R16	0x4B
+C:00008c e40b      ldi	r16,low(0x4B) 
+C:00008d 940e 0135 call	Com0_1
+C:00008f   +  	ENV0_R16	ACK
+C:00008f e006      ldi	r16,low(ACK) 
+C:000090 940e 0135 call	Com0_1
+         	;call 	Dtest
+         	;call 	Led
+C:000092 940e 1120 	call	debug
+C:000094 940e 058e 	call 	Vlist
+C:000096 940e 0504 	call	Receive0
+          Reset1:
+C:000098 cfff      	rjmp	Reset1	
+C:000099 9508      	ret
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         ;;;; Init
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         
+          Initport: 
+C:00009a e10c      	ldi	r16, 0x1C ;DDRB = 0x0A ;pour pwm2A
+C:00009b b904      	out	DDRB , r16
+         	
+C:00009c e007      	ldi	r16, 0x07 ;DDRB = 0x07
+         	;out	PORTB , r16
+         	;ldi	r16, 3 	;DDRC = 0
+C:00009d b907      	out	DDRC , r16
+C:00009e ec02      	ldi	r16, 0xC2 ;DDRD = 0xF2
+C:00009f b90a      	out	DDRD , r16
+C:0000a0 9a5a      	sbi	portd,2 ; pullup
+C:0000a1 9a5b      	sbi	portd,3 ; pullup
+C:0000a2 9a5e      	sbi	portd,6
+C:0000a3 985f      	cbi	portd,7
+C:0000a4 9508      	ret
+         	
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         ;;;; Init twi
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         
+          Init_twi: 
+C:0000a5 e00a      	ldi	r16, TWBRVAL ;pour scl=200k avec prescaler=1
+C:0000a6 9300 00b8 	sts	TWBR , r16
+C:0000a8 e004      	ldi	r16,(1<<TWEN)
+C:0000a9 9300 00bc 	sts	TWCR , r16
+C:0000ab 9508      	ret
+         	
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;/
+          InitForth:
+C:0000ac 903f      	pop	r3
+C:0000ad 902f      	pop	r2
+C:0000ae e0c0      	ldi	YL,LOW(lastword) ; forth tab
+C:0000af e0d1      	ldi	YH,HIGH(lastword)
+C:0000b0 e210      	ldi	r17,0x20
+C:0000b1 2700      	clr	r16
+C:0000b2 bd02      	out	EEARH,r16
+          InitForth1:
+C:0000b3 99f9      	sbic EECR,EEPE
+C:0000b4 cffe      	rjmp InitForth1
+          InitForth2:
+C:0000b5 bd01      	out	EEARL,r16
+C:0000b6 9af8      	sbi	EECR,EERE
+C:0000b7 b410      	in	r1,EEDR
+C:0000b8 9219      	st	Y+,r1
+C:0000b9 9503      	inc	r16
+C:0000ba 951a      	dec	r17
+C:0000bb f7c9      	brne	InitForth2
+C:0000bc 91a0 0106 	lds	XL,(DP_save)
+C:0000be 91b0 0107 	lds	XH,(DP_save+1)
+C:0000c0 e0c0      	ldi	YL,0
+C:0000c1 e0d5      	ldi	YH,0x05
+C:0000c2 97e8      	sbiw	YH:YL,0x38
+C:0000c3 e200      	ldi	r16,0x20
+          InitForth3:
+C:0000c4 930d      	st	X+,r16
+C:0000c5 9721      	sbiw	YH:YL,0x01
+C:0000c6 f7e9      	brne	InitForth3
+C:0000c7 91a0 0106 	lds	XL,(DP_save)
+C:0000c9 91b0 0107 	lds	XH,(DP_save+1)
+C:0000cb ec37      	ldi	r19,low(error_sp)
+C:0000cc e043      	ldi	r20,high(error_sp)
+C:0000cd e008      	ldi	r16,HIGH(RAMEND) ; set stack register
+C:0000ce bf0e      	out	SPH,r16
+C:0000cf ef0f      	ldi	r16,LOW(RAMEND)
+C:0000d0 bf0d      	out	SPL,r16
+C:0000d1 e100      	ldi	r16,0x10
+          InitForth4:
+C:0000d2 933f      	push	r19
+C:0000d3 934f      	push	r20
+C:0000d4 950a      	dec	r16
+C:0000d5 f7e1      	brne	InitForth4
+C:0000d6 922f      	push	r2
+C:0000d7 923f      	push	r3
+C:0000d8 e000      	ldi	r16,NORMAL
+C:0000d9 9300 010f 	sts	etat,r16
+C:0000db 9508      	ret
+         
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         ;;;; Usart0
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         
+          Usart0_init:
+         ; Set baud rate
+C:0000dc e607          ldi	r16, LOW(UBRRVAL0)
+C:0000dd 9300 00c4     sts	UBRR0L,r16
+C:0000df e000          ldi	r16, HIGH(UBRRVAL0)
+C:0000e0 9300 00c5     sts	UBRR0H,r16
+C:0000e2 e000          ldi	r16, 0
+C:0000e3 9300 00c0     sts	UCSR0A,r16
+         ; Enable receiver and transmitter and interrupt
+C:0000e5 e108          ldi	r16, (1<<RXEN0)+(1<<TXEN0);| (1 << RXCIE0)
+C:0000e6 9300 00c1     sts	UCSR0B,r16
+         ; Set frame format: 8data, 1 stop bit
+            ; ldi	r16,(1 << UCSZ01)+(1 << UCSZ00);+(1 << USBS0);;
+C:0000e8 e006      ldi r16,0x06 ; (1<<USBS0)|(3<<UCSZ00)
+C:0000e9 9300 00c2     sts	UCSR0C,r16
+C:0000eb 9508          ret
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;/
+          .DB	" recv0",0x5,1<<EXEC
+C:0000EC 2072656376300508
+          .DW	link
+C:0000f0 0000
+          Recv0:
+          .SET link=recv0
+C:0000f1 919e      	ld	r25,-X
+C:0000f2 918e      	ld	r24,-X
+C:0000f3 938f      	push	r24
+C:0000f4 939f      	push	r25
+          Recv0_1:
+C:0000f5   +  	REC0_DP
+          REC0_DP1:
+C:0000f5 9160 00c0 lds	r22,UCSR0A
+C:0000f7 ff67      sbrs	r22,RXC0
+C:0000f8 cffc      rjmp	REC0_DP1
+C:0000f9 9160 00c6 lds	r22,UDR0
+C:0000fb 936d      st	X+,r22
+C:0000fc 9701      	sbiw	r25:r24,1
+C:0000fd f7b9      	brne	Recv0_1
+C:0000fe 919f      	pop	r25
+C:0000ff 918f      	pop	r24
+C:000100 938d      	st	X+,r24
+C:000101 939d      	st	X+,r25
+C:000102 9508      	ret
+         	
+          .DB	" send0",0x5,1<<EXEC
+C:000103 2073656E64300508
+          .DW	link
+C:000107 00f1
+          Send0:
+          .SET link=Send0
+C:000108 919e      	ld	r25,-X
+C:000109 918e      	ld	r24,-X
+          Send0_1:
+C:00010a 915e      	ld	r21,-X 
+C:00010b   +  	ENV0
+          ENV01:
+C:00010b 9170 00c0 lds	r23,UCSR0A
+C:00010d ff75      sbrs	r23,UDRE0
+C:00010e cffc      rjmp	ENV01 
+C:00010f 9350 00c6 sts	UDR0,r21
+C:000111 9701      	sbiw	r25:r24,1
+C:000112 f7b9      	brne	Send0_1
+C:000113 9508      	ret
+          .DB	" rcom0",0x5,1<<EXEC
+C:000114 2072636F6D300508
+          .DW	link
+C:000118 0108
+          rcom0:
+          .SET link=Rcom0
+          rcom0_1:
+C:000119 9160 00c0 	lds	r22,UCSR0A
+C:00011b ff67      	sbrs	r22,RXC0
+C:00011c cffc      	rjmp	rcom0_1
+C:00011d 9160 00c6 	lds	r22,UDR0
+C:00011f 936d      	st	X+,r22
+C:000120 2766      	clr	r22
+C:000121 936d      	st	X+,r22
+C:000122 9508      	ret
+          .DB	"rflag0",0x6,1<<EXEC
+C:000123 72666C6167300608
+          .DW	link
+C:000127 0119
+          rflag0:
+          .SET link=rflag0
+C:000128 9160 00c0 	lds	r22,UCSR0A
+C:00012a ff67      	sbrs	r22,RXC0
+C:00012b c002      	rjmp	rflag0_1
+C:00012c 9418      	sez
+C:00012d 9508      	ret
+          rflag0_1:
+C:00012e 9498      	clz
+C:00012f 9508      	ret
+         	
+         
+          .DB     "com0",0x4,1<<EXEC
+C:000130 636F6D300408
+          .DW	link
+C:000133 0128
+          com0:
+          .SET link=com0
+C:000134 910e      	ld	r16,-X
+          com0_1:
+C:000135 9170 00c0 	lds	r23,UCSR0A
+C:000137 ff75      	sbrs	r23,UDRE0
+C:000138 cffc      	rjmp	com0_1
+C:000139 9300 00c6 	sts	UDR0,r16
+C:00013b 9508      	ret
+          .DB	"S",0x22,0x2,1<<compile
+C:00013C 53220220
+          .DW	link
+C:00013e 0134
+          Sguil:
+          .SET link=Sguil
+C:00013f 9508      	ret
+C:000140   +  	ENV0_R16	ESC
+C:000140 e10b      ldi	r16,low(ESC) 
+C:000141 940e 0135 call	Com0_1
+C:000143   +  	ENV0_R16	0x22	; S"
+C:000143 e202      ldi	r16,low(0x22) 
+C:000144 940e 0135 call	Com0_1
+C:000146 940e 0569 	call	Word0
+C:000148 e642      	ldi	r20,low(_Sguil)
+C:000149 e051      	ldi	r21,high(_Sguil)
+C:00014a   +  	COMPILE20
+C:00014a e00e      ldi	r16,0x0E
+C:00014b 930d      st	X+,r16
+C:00014c e904      ldi	r16,0x94
+C:00014d 930d      st	X+,r16
+C:00014e 934d      st	X+,r20
+C:00014f 935d      st	X+,r21
+C:000150 9634      adiw	ZH:ZL,0x04
+C:000151 e1cf      	ldi	YL,LOW(wordbuf)	;tampon wordbuf
+C:000152 e0d1      	ldi	YH,HIGH(wordbuf)
+C:000153 9109      	ld 	r16,Y+
+C:000154 2f20      	mov	r18,r16
+          Sguil1:
+C:000155 9119      	ld	r17,Y+
+C:000156 931d      	st	X+,r17
+C:000157 9111      	ld	r17,Z+
+C:000158 950a      	dec	r16
+C:000159 f7d9      	brne	Sguil1
+C:00015a 2711      	clr	r17
+C:00015b 931d      	st	X+,r17
+C:00015c 9111      	ld	r17,Z+
+C:00015d fd20      	sbrc	r18,0
+C:00015e 9508      	ret
+C:00015f 931d      	st	X+,r17
+C:000160 9111      	ld	r17,Z+
+C:000161 9508      	ret
+          _Sguil:
+C:000162 91ff      	pop	ZH
+C:000163 91ef      	pop	Zl
+C:000164 0fee      	lsl	Zl
+C:000165 1fff      	rol	ZH
+          _Sguil1:
+C:000166 9155      	lpm	r21,Z+
+C:000167 3050      	cpi	r21,0
+C:000168 f039      	breq	_Sguil2
+C:000169   +  	ENV0
+          ENV01:
+C:000169 9170 00c0 lds	r23,UCSR0A
+C:00016b ff75      sbrs	r23,UDRE0
+C:00016c cffc      rjmp	ENV01 
+C:00016d 9350 00c6 sts	UDR0,r21
+C:00016f cff6      	rjmp	_Sguil1
+          _Sguil2:
+C:000170 95f6      	lsr	ZH
+C:000171 95e7      	ror	Zl
+C:000172 f408      	brcc	_Sguil3
+C:000173 9631      	adiw	ZH:ZL,1
+          _Sguil3: 
+C:000174 93ef      	push	ZL
+C:000175 93ff      	push	ZH
+C:000176 9508      	ret
+         	
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         ;;;; spi
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         
+          Spi_init:
+C:000177 e21c      	ldi	r17,(1<<SS)|((1<<MOSI)|1<<SCK)	;(SS,MOSI,SCK) as output
+C:000178 b104      	in	r16,DDRB
+C:000179 2b01      	or	r16,r17
+C:00017a b904      	out	DDRB,r16
+C:00017b 9a2a      	sbi	portb,SS
+         ; Enable SPI, Master, set clock rate fck/16
+C:00017c e501      	ldi	r16,(1<<SPE)|(1<<MSTR)|(1<<SPR0)
+C:00017d bd0c      	out	SPCR,r16
+C:00017e 9508      	ret
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         ;;;; Init pwm2
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         
+          Init_pwm2: 
+C:00017f e00a      	ldi	r16, 0x0A ;DDRB = 0x0A ;pour pwm2A
+C:000180 b904      	out	DDRB , r16
+C:000181 e803      	ldi	r16, 0x83 ;
+C:000182 9300 00b0 	sts	TCCR2A,r16
+C:000184 e002      	ldi	r16, 0x02
+C:000185 9300 00b1 	sts	TCCR2B , r16
+C:000187 e000      	ldi	r16, 0x0 ;
+C:000188 9300 00b3 	sts	OCR2A , r16
+C:00018a 9508      	ret
+         
+          .DB     "pwm2",0x4,1<<EXEC
+C:00018B 70776D320408
+          .DW	link
+C:00018e 013f
+          pwm2:
+          .SET link=pwm2
+C:00018f 910e      	ld	r16,-X
+C:000190 910e      	ld	r16,-X
+C:000191 9300 00b3 	sts	OCR2A , r16
+C:000193 9508      	ret	
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         ;;;; Init adc
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         
+          Init_adc: 
+C:000194 ec00      	ldi	r16, (1<<REFS1)|(1<<REFS0) ; adc0
+C:000195 9300 007c 	sts	ADMUX,r16
+C:000197 e800      	ldi	r16, (1<<ADEN)
+C:000198 9300 007a 	sts	ADCSRA,r16
+C:00019a 9508      	ret
+         
+          .DB     "adcn",0x4,1<<EXEC
+C:00019B 6164636E0408
+          .DW	link
+C:00019e 018f
+          Adcn:
+          .SET link=adcn
+C:00019f 911e      	ld	r17,-X
+C:0001a0 911e      	ld	r17,-X
+C:0001a1 701f      	andi	r17,0x0F
+C:0001a2 ec00      	ldi	r16, (1<<REFS1)|(1<<REFS0)
+C:0001a3 2b01      	or	r16,r17
+C:0001a4 9300 007c 	sts	ADMUX,r16 ; select analog port
+C:0001a6 ec07      	ldi	r16, (1<<ADEN)|(1<<ADSC)|(1<<ADPS2)|(1<<ADPS1)|(1<<ADPS0)
+C:0001a7 9300 007a 	sts	ADCSRA,r16 ; start convect
+C:0001a9 9508      	ret	
+          .DB     "r_adcn",0x6,1<<EXEC
+C:0001AA 725F6164636E0608
+          .DW	link
+C:0001ae 019f
+          R_adcn:
+          .SET link=R_adcn
+C:0001af 9100 007a 	lds	r16,ADCSRA
+C:0001b1 fd06      	sbrc	r16,ADSC
+C:0001b2 cffc      	rjmp	R_adcn
+C:0001b3 9100 0078 	lds	r16,ADCL
+C:0001b5 930d      	st	X+,r16
+C:0001b6 9100 0079 	lds	r16,ADCH
+C:0001b8 930d      	st	X+,r16
+C:0001b9 9508      	ret	
+         
+         
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         ;;;; lcd
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         
+          .DB     "lcd_init",0x8,1<<EXEC
+C:0001BA 6C63645F696E69740808
+          .DW	link
+C:0001bf 01af
+          lcd_init:
+          .SET link=lcd_init
+C:0001c0   +  	PAUSE	1500
+C:0001c0 e002      ldi	r16, 0x02 
+
+C:0001c1 bd04      out	TCCR0A , r16
+C:0001c2 e104      ldi	r16, 0x14 
+
+C:0001c3 bd07      out	OCR0A , r16
+C:0001c4 2700      clr	r16 
+
+C:0001c5 bb05      out	TIFR0 , r16
+C:0001c6 bd06      out	TCNT0 , r16
+C:0001c7 e002      ldi	r16, 0x02 
+
+C:0001c8 bd05      out	TCCR0B , r16
+C:0001c9 e0d5      ldi	r29,high(1500)
+C:0001ca edcc      ldi	r28,low(1500)
+C:0001cb 940e 041f call	Delay2
+C:0001cd e30c      	ldi	r16,0x3C
+C:0001ce 930d      	st	X+,r16
+C:0001cf e308      	ldi	r16,0x38
+C:0001d0 930d      	st	X+,r16
+C:0001d1 e30c      	ldi	r16,0x3C
+C:0001d2 930d      	st	X+,r16
+C:0001d3 e003      	ldi	r16,0x03
+C:0001d4 930d      	st	X+,r16
+C:0001d5 e40e      	ldi	r16,SLA_W
+C:0001d6 930d      	st	X+,r16
+C:0001d7 940e 0490 	call	FTwi_s
+C:0001d9   +  	PAUSE	410
+C:0001d9 e002      ldi	r16, 0x02 
+
+C:0001da bd04      out	TCCR0A , r16
+C:0001db e104      ldi	r16, 0x14 
+
+C:0001dc bd07      out	OCR0A , r16
+C:0001dd 2700      clr	r16 
+
+C:0001de bb05      out	TIFR0 , r16
+C:0001df bd06      out	TCNT0 , r16
+C:0001e0 e002      ldi	r16, 0x02 
+
+C:0001e1 bd05      out	TCCR0B , r16
+C:0001e2 e0d1      ldi	r29,high(410)
+C:0001e3 e9ca      ldi	r28,low(410)
+C:0001e4 940e 041f call	Delay2
+C:0001e6 e30c      	ldi	r16,0x3C
+C:0001e7 930d      	st	X+,r16
+C:0001e8 e308      	ldi	r16,0x38
+C:0001e9 930d      	st	X+,r16
+C:0001ea e30c      	ldi	r16,0x3C
+C:0001eb 930d      	st	X+,r16
+C:0001ec e003      	ldi	r16,0x03
+C:0001ed 930d      	st	X+,r16
+C:0001ee e40e      	ldi	r16,SLA_W
+C:0001ef 930d      	st	X+,r16
+C:0001f0 940e 0490 	call	FTwi_s
+C:0001f2   +  	PAUSE	10
+C:0001f2 e002      ldi	r16, 0x02 
+
+C:0001f3 bd04      out	TCCR0A , r16
+C:0001f4 e104      ldi	r16, 0x14 
+
+C:0001f5 bd07      out	OCR0A , r16
+C:0001f6 2700      clr	r16 
+
+C:0001f7 bb05      out	TIFR0 , r16
+C:0001f8 bd06      out	TCNT0 , r16
+C:0001f9 e002      ldi	r16, 0x02 
+
+C:0001fa bd05      out	TCCR0B , r16
+C:0001fb e0d0      ldi	r29,high(10)
+C:0001fc e0ca      ldi	r28,low(10)
+C:0001fd 940e 041f call	Delay2
+C:0001ff e30c      	ldi	r16,0x3C
+C:000200 930d      	st	X+,r16
+C:000201 e308      	ldi	r16,0x38
+C:000202 930d      	st	X+,r16
+C:000203 e30c      	ldi	r16,0x3C
+C:000204 930d      	st	X+,r16
+C:000205 e003      	ldi	r16,0x03
+C:000206 930d      	st	X+,r16
+C:000207 e40e      	ldi	r16,SLA_W
+C:000208 930d      	st	X+,r16
+C:000209 940e 0490 	call	FTwi_s
+C:00020b   +  	PAUSE	10
+C:00020b e002      ldi	r16, 0x02 
+
+C:00020c bd04      out	TCCR0A , r16
+C:00020d e104      ldi	r16, 0x14 
+
+C:00020e bd07      out	OCR0A , r16
+C:00020f 2700      clr	r16 
+
+C:000210 bb05      out	TIFR0 , r16
+C:000211 bd06      out	TCNT0 , r16
+C:000212 e002      ldi	r16, 0x02 
+
+C:000213 bd05      out	TCCR0B , r16
+C:000214 e0d0      ldi	r29,high(10)
+C:000215 e0ca      ldi	r28,low(10)
+C:000216 940e 041f call	Delay2
+C:000218 e20c      	ldi	r16,0x2C	;4 bits
+C:000219 930d      	st	X+,r16
+C:00021a e208      	ldi	r16,0x28
+C:00021b 930d      	st	X+,r16
+C:00021c e20c      	ldi	r16,0x2C
+C:00021d 930d      	st	X+,r16
+C:00021e e003      	ldi	r16,0x03
+C:00021f 930d      	st	X+,r16
+C:000220 e40e      	ldi	r16,SLA_W
+C:000221 930d      	st	X+,r16
+C:000222 940e 0490 	call	FTwi_s
+C:000224   +  	PAUSE	1000
+C:000224 e002      ldi	r16, 0x02 
+
+C:000225 bd04      out	TCCR0A , r16
+C:000226 e104      ldi	r16, 0x14 
+
+C:000227 bd07      out	OCR0A , r16
+C:000228 2700      clr	r16 
+
+C:000229 bb05      out	TIFR0 , r16
+C:00022a bd06      out	TCNT0 , r16
+C:00022b e002      ldi	r16, 0x02 
+
+C:00022c bd05      out	TCCR0B , r16
+C:00022d e0d3      ldi	r29,high(1000)
+C:00022e eec8      ldi	r28,low(1000)
+C:00022f 940e 041f call	Delay2
+C:000231 e80c      	ldi	r16,0x8C	;4 bits
+C:000232 930d      	st	X+,r16
+C:000233 e808      	ldi	r16,0x88
+C:000234 930d      	st	X+,r16
+C:000235 e80c      	ldi	r16,0x8C
+C:000236 930d      	st	X+,r16
+C:000237 e20c      	ldi	r16,0x2C
+C:000238 930d      	st	X+,r16
+C:000239 e208      	ldi	r16,0x28
+C:00023a 930d      	st	X+,r16
+C:00023b e20c      	ldi	r16,0x2C
+C:00023c 930d      	st	X+,r16
+C:00023d e006      	ldi	r16,0x06
+C:00023e 930d      	st	X+,r16
+C:00023f e40e      	ldi	r16,SLA_W
+C:000240 930d      	st	X+,r16
+C:000241 940e 0490 	call	FTwi_s
+C:000243   +  	PAUSE	100
+C:000243 e002      ldi	r16, 0x02 
+
+C:000244 bd04      out	TCCR0A , r16
+C:000245 e104      ldi	r16, 0x14 
+
+C:000246 bd07      out	OCR0A , r16
+C:000247 2700      clr	r16 
+
+C:000248 bb05      out	TIFR0 , r16
+C:000249 bd06      out	TCNT0 , r16
+C:00024a e002      ldi	r16, 0x02 
+
+C:00024b bd05      out	TCCR0B , r16
+C:00024c e0d0      ldi	r29,high(100)
+C:00024d e6c4      ldi	r28,low(100)
+C:00024e 940e 041f call	Delay2
+C:000250 e80c      	ldi	r16,0x8C	;display off
+C:000251 930d      	st	X+,r16
+C:000252 e808      	ldi	r16,0x88
+C:000253 930d      	st	X+,r16
+C:000254 e80c      	ldi	r16,0x8C
+C:000255 930d      	st	X+,r16
+C:000256 e00c      	ldi	r16,0x0C
+C:000257 930d      	st	X+,r16
+C:000258 e008      	ldi	r16,0x08
+C:000259 930d      	st	X+,r16
+C:00025a e00c      	ldi	r16,0x0C
+C:00025b 930d      	st	X+,r16
+C:00025c e006      	ldi	r16,0x06
+C:00025d 930d      	st	X+,r16
+C:00025e e40e      	ldi	r16,SLA_W
+C:00025f 930d      	st	X+,r16
+C:000260 940e 0490 	call	FTwi_s
+C:000262   +  	PAUSE	100
+C:000262 e002      ldi	r16, 0x02 
+
+C:000263 bd04      out	TCCR0A , r16
+C:000264 e104      ldi	r16, 0x14 
+
+C:000265 bd07      out	OCR0A , r16
+C:000266 2700      clr	r16 
+
+C:000267 bb05      out	TIFR0 , r16
+C:000268 bd06      out	TCNT0 , r16
+C:000269 e002      ldi	r16, 0x02 
+
+C:00026a bd05      out	TCCR0B , r16
+C:00026b e0d0      ldi	r29,high(100)
+C:00026c e6c4      ldi	r28,low(100)
+C:00026d 940e 041f call	Delay2
+C:00026f e60c      	ldi	r16,0x6C	;entry set mode
+C:000270 930d      	st	X+,r16
+C:000271 e608      	ldi	r16,0x68
+C:000272 930d      	st	X+,r16
+C:000273 e60c      	ldi	r16,0x6C
+C:000274 930d      	st	X+,r16
+C:000275 e00c      	ldi	r16,0x0C
+C:000276 930d      	st	X+,r16
+C:000277 e008      	ldi	r16,0x08
+C:000278 930d      	st	X+,r16
+C:000279 e00c      	ldi	r16,0x0C
+C:00027a 930d      	st	X+,r16
+C:00027b e006      	ldi	r16,0x06
+C:00027c 930d      	st	X+,r16
+C:00027d e40e      	ldi	r16,SLA_W
+C:00027e 930d      	st	X+,r16
+C:00027f 940e 0490 	call	FTwi_s
+C:000281   +  	PAUSE	10
+C:000281 e002      ldi	r16, 0x02 
+
+C:000282 bd04      out	TCCR0A , r16
+C:000283 e104      ldi	r16, 0x14 
+
+C:000284 bd07      out	OCR0A , r16
+C:000285 2700      clr	r16 
+
+C:000286 bb05      out	TIFR0 , r16
+C:000287 bd06      out	TCNT0 , r16
+C:000288 e002      ldi	r16, 0x02 
+
+C:000289 bd05      out	TCCR0B , r16
+C:00028a e0d0      ldi	r29,high(10)
+C:00028b e0ca      ldi	r28,low(10)
+C:00028c 940e 041f call	Delay2
+C:00028e ec0c      	ldi	r16,0xCC	;cursor move
+C:00028f 930d      	st	X+,r16
+C:000290 ec08      	ldi	r16,0xC8
+C:000291 930d      	st	X+,r16
+C:000292 ec0c      	ldi	r16,0xCC
+C:000293 930d      	st	X+,r16
+C:000294 e10c      	ldi	r16,0x1C
+C:000295 930d      	st	X+,r16
+C:000296 e108      	ldi	r16,0x18
+C:000297 930d      	st	X+,r16
+C:000298 e10c      	ldi	r16,0x1C
+C:000299 930d      	st	X+,r16
+C:00029a e006      	ldi	r16,0x06
+C:00029b 930d      	st	X+,r16
+C:00029c e40e      	ldi	r16,SLA_W
+C:00029d 930d      	st	X+,r16
+C:00029e 940e 0490 	call	FTwi_s
+C:0002a0   +  	PAUSE	10
+C:0002a0 e002      ldi	r16, 0x02 
+
+C:0002a1 bd04      out	TCCR0A , r16
+C:0002a2 e104      ldi	r16, 0x14 
+
+C:0002a3 bd07      out	OCR0A , r16
+C:0002a4 2700      clr	r16 
+
+C:0002a5 bb05      out	TIFR0 , r16
+C:0002a6 bd06      out	TCNT0 , r16
+C:0002a7 e002      ldi	r16, 0x02 
+
+C:0002a8 bd05      out	TCCR0B , r16
+C:0002a9 e0d0      ldi	r29,high(10)
+C:0002aa e0ca      ldi	r28,low(10)
+C:0002ab 940e 041f call	Delay2
+C:0002ad ef0c      	ldi	r16,0xFC	;display on
+C:0002ae 930d      	st	X+,r16
+C:0002af ef08      	ldi	r16,0xF8
+C:0002b0 930d      	st	X+,r16
+C:0002b1 ef0c      	ldi	r16,0xFC
+C:0002b2 930d      	st	X+,r16
+C:0002b3 e00c      	ldi	r16,0x0C
+C:0002b4 930d      	st	X+,r16
+C:0002b5 e008      	ldi	r16,0x08
+C:0002b6 930d      	st	X+,r16
+C:0002b7 e00c      	ldi	r16,0x0C
+C:0002b8 930d      	st	X+,r16
+C:0002b9 e006      	ldi	r16,0x06
+C:0002ba 930d      	st	X+,r16
+C:0002bb e40e      	ldi	r16,SLA_W
+C:0002bc 930d      	st	X+,r16
+C:0002bd 940e 0490 	call	FTwi_s
+C:0002bf   +  	PAUSE	10
+C:0002bf e002      ldi	r16, 0x02 
+
+C:0002c0 bd04      out	TCCR0A , r16
+C:0002c1 e104      ldi	r16, 0x14 
+
+C:0002c2 bd07      out	OCR0A , r16
+C:0002c3 2700      clr	r16 
+
+C:0002c4 bb05      out	TIFR0 , r16
+C:0002c5 bd06      out	TCNT0 , r16
+C:0002c6 e002      ldi	r16, 0x02 
+
+C:0002c7 bd05      out	TCCR0B , r16
+C:0002c8 e0d0      ldi	r29,high(10)
+C:0002c9 e0ca      ldi	r28,low(10)
+C:0002ca 940e 041f call	Delay2
+C:0002cc 940e 03b3 	call	Lcd_clr1
+C:0002ce 9508      	ret
+          testlcd:
+         	
+C:0002cf e000      	ldi	r16,0x0
+          testlcd1:
+C:0002d0 930d      	st	X+,r16
+C:0002d1 930f      	push	r16
+C:0002d2 e001      	ldi	r16,0x01
+C:0002d3 930d      	st	X+,r16
+C:0002d4 e40e      	ldi	r16,SLA_W
+C:0002d5 930d      	st	X+,r16
+C:0002d6 940e 0490 	call	FTwi_s
+C:0002d8 940e 042d 	call	Testled
+C:0002da 910f      	pop	r16
+C:0002db 9503      	inc	r16
+C:0002dc 940c 02d0 	jmp	testlcd1
+         	
+          .DB	"emit",0x4,1<<EXEC
+C:0002DE 656D69740408
+          .DW	link
+C:0002e1 01c0
+          Emit:
+          .SET link=Emit	
+C:0002e2 910e      	ld	r16,-X
+C:0002e3 910e      	ld	r16,-X
+          Emit1:
+C:0002e4 930f      	push r16
+C:0002e5 0f00      	lsl	r16
+C:0002e6 0f00      	lsl	r16
+C:0002e7 0f00      	lsl	r16
+C:0002e8 0f00      	lsl	r16
+C:0002e9 600d      	ori	r16,0x0D
+C:0002ea 930d      	st	X+,r16
+C:0002eb 930f      	push	r16
+C:0002ec 7f0b      	andi	r16,0xFB
+C:0002ed 930d      	st	X+,r16
+C:0002ee 910f      	pop	r16
+C:0002ef 930d      	st	X+,r16
+C:0002f0 910f      	pop	r16
+C:0002f1 7f00      	andi	r16,0xF0
+C:0002f2 600d      	ori	r16,0x0D
+C:0002f3 930d      	st	X+,r16
+C:0002f4 930f      	push	r16
+C:0002f5 7f0b      	andi	r16,0xFB
+C:0002f6 930d      	st	X+,r16
+C:0002f7 910f      	pop	r16
+C:0002f8 930d      	st	X+,r16
+C:0002f9 e006      	ldi	r16,0x06
+C:0002fa 930d      	st	X+,r16
+C:0002fb e40e      	ldi	r16,SLA_W
+C:0002fc 930d      	st	X+,r16
+C:0002fd 940e 0490 	call	FTwi_s
+C:0002ff 9100 0113 	lds	r16,curs_screen
+C:000301 9503      	inc	r16
+C:000302 9300 0113 	sts	curs_screen,r16
+C:000304 940c 0332 	jmp	lcd_gotoxy1
+         	
+          .DB	" lcd_com",0x7,1<<EXEC
+C:000306 206C63645F636F6D0708
+          .DW	link
+C:00030b 02e2
+          Lcd_com:
+          .SET link=Lcd_com	
+C:00030c 910e      	ld	r16,-X
+          Lcd_com1:
+C:00030d 930f      	push r16
+C:00030e 0f00      	lsl	r16
+C:00030f 0f00      	lsl	r16
+C:000310 0f00      	lsl	r16
+C:000311 0f00      	lsl	r16
+C:000312 600c      	ori	r16,0x0C
+C:000313 930d      	st	X+,r16
+C:000314 930f      	push	r16
+C:000315 7f0b      	andi	r16,0xFB
+C:000316 930d      	st	X+,r16
+C:000317 910f      	pop	r16
+C:000318 930d      	st	X+,r16
+C:000319 910f      	pop	r16
+C:00031a 7f00      	andi	r16,0xF0
+C:00031b 600c      	ori	r16,0x0C
+C:00031c 930d      	st	X+,r16
+C:00031d 930f      	push	r16
+C:00031e 7f0b      	andi	r16,0xFB
+C:00031f 930d      	st	X+,r16
+C:000320 910f      	pop	r16
+C:000321 930d      	st	X+,r16
+C:000322 e006      	ldi	r16,0x06
+C:000323 930d      	st	X+,r16
+C:000324 e40e      	ldi	r16,SLA_W
+C:000325 930d      	st	X+,r16
+C:000326 940e 0490 	call	FTwi_s
+C:000328 9508      	ret
+         	
+          .DB	"lcd_gotoxy",0xA,1<<EXEC
+C:000329 6C63645F676F746F78790A08
+          .DW	link
+C:00032f 030c
+          lcd_gotoxy:
+          .SET link=lcd_gotoxy
+C:000330 9100 0113 	lds	r16,curs_screen
+          lcd_gotoxy1:
+C:000332 3104      	cpi	r16,(LCD_START_LINE1+LCD_DISP_LENGTH)
+C:000333 f419      	brne	lcd_gotoxy2
+C:000334 e400      	ldi	r16,LCD_START_LINE2
+C:000335 940c 0347 	jmp	lcd_gotoxy6
+          lcd_gotoxy2:
+C:000337 3504      	cpi	r16,(LCD_START_LINE2+LCD_DISP_LENGTH)
+C:000338 f419      	brne	lcd_gotoxy3
+C:000339 e104      	ldi	r16,LCD_START_LINE3
+C:00033a 940c 0347 	jmp	lcd_gotoxy6
+          lcd_gotoxy3:
+C:00033c 3208      	cpi	r16,(LCD_START_LINE3+LCD_DISP_LENGTH)
+C:00033d f419      	brne	lcd_gotoxy4
+C:00033e e504      	ldi	r16,LCD_START_LINE4
+C:00033f 940c 0347 	jmp	lcd_gotoxy6
+          lcd_gotoxy4:
+C:000341 3608      	cpi	r16,(LCD_START_LINE4+LCD_DISP_LENGTH)
+C:000342 f419      	brne	lcd_gotoxy5
+C:000343 e000      	ldi	r16,LCD_START_LINE1
+C:000344 940c 0347 	jmp	lcd_gotoxy6
+          lcd_gotoxy5:
+C:000346 9508      	ret
+          lcd_gotoxy6:
+C:000347 9300 0113 	sts	curs_screen,r16
+C:000349 6800      	ori	r16,0x80
+C:00034a 940e 030d 	call	Lcd_com1
+C:00034c 9508      	ret
+         	
+          .DB	" sendlcd",0x7,1<<EXEC
+C:00034D 2073656E646C63640708
+          .DW	link
+C:000352 0330
+          Sendlcd:
+          .SET link=Sendlcd	
+C:000353   +  	PUSHZ
+C:000353 93e0 0111 sts	save_z,ZL
+C:000355 93f0 0112 sts	save_z+1,ZH
+C:000357 2700      	clr	r16
+C:000358 91fe      	ld	ZH, -X
+C:000359 91ee      	ld	ZL, -X
+C:00035a 0fee      	lsl	ZL
+C:00035b 1fff      	rol	ZH
+C:00035c 9105      	lpm	r16,z+
+          Sendlcd1:
+C:00035d 930f      	push r16
+C:00035e 9105      	lpm	r16,z+
+C:00035f 940e 02e4 	call	Emit1
+C:000361 910f      	pop r16
+C:000362 950a      	dec	r16
+C:000363 f7c9      	brne	Sendlcd1
+C:000364   +  	POPZ
+C:000364 91e0 0111 lds	ZL,save_z
+C:000366 91f0 0112 lds	ZH,save_z+1
+C:000368 9508      	ret
+          .DB	" display",0x7,1<<EXEC
+C:000369 20646973706C61790708
+          .DW	link
+C:00036e 0353
+          Display0:
+          .SET link=Display0	
+C:00036f 910e      	ld	r16,-X
+          Display1:
+C:000370 930f      	push	r16
+C:000371 910e      	ld	r16,-X
+C:000372 940e 02e4 	call	Emit1
+C:000374 910f      	pop	r16
+C:000375 950a      	dec	r16
+C:000376 f7c9      	brne	Display1
+C:000377 9508      	ret
+          .DB	"dispcom0",0x8,1<<EXEC
+C:000378 64697370636F6D300808
+          .DW	link
+C:00037d 036f
+          dispcom0:
+          .SET link=dispcom0
+C:00037e   +  	REC0	
+          REC01:
+C:00037e 9160 00c0 lds	r22,UCSR0A
+C:000380 ff67      sbrs	r22,RXC0
+C:000381 cffc      rjmp	REC01
+C:000382 9160 00c6 lds	r22,UDR0
+C:000384 2f06      	mov	r16,r22 
+          dispcom01:
+C:000385 930f      	push	r16
+C:000386   +  	REC0
+          REC01:
+C:000386 9160 00c0 lds	r22,UCSR0A
+C:000388 ff67      sbrs	r22,RXC0
+C:000389 cffc      rjmp	REC01
+C:00038a 9160 00c6 lds	r22,UDR0
+C:00038c 2f06      	mov	r16,r22
+C:00038d 940e 02e4 	call	Emit1
+C:00038f 910f      	pop	r16
+C:000390 950a      	dec	r16
+C:000391 f799      	brne	dispcom01
+C:000392 9508      	ret
+          .DB	"lcd_home",0x8,1<<EXEC
+C:000393 6C63645F686F6D650808
+          .DW	link
+C:000398 037e
+          Lcd_home1:
+          .SET link=Lcd_home1
+C:000399 e002      	ldi	r16,(1<<LCD_HOME)
+C:00039a 940e 030d 	call	Lcd_com1
+C:00039c 2700      	clr	r16
+C:00039d 9300 0113 	sts	curs_screen,r16
+C:00039f   +  	PAUSE	152
+C:00039f e002      ldi	r16, 0x02 
+
+C:0003a0 bd04      out	TCCR0A , r16
+C:0003a1 e104      ldi	r16, 0x14 
+
+C:0003a2 bd07      out	OCR0A , r16
+C:0003a3 2700      clr	r16 
+
+C:0003a4 bb05      out	TIFR0 , r16
+C:0003a5 bd06      out	TCNT0 , r16
+C:0003a6 e002      ldi	r16, 0x02 
+
+C:0003a7 bd05      out	TCCR0B , r16
+C:0003a8 e0d0      ldi	r29,high(152)
+C:0003a9 e9c8      ldi	r28,low(152)
+C:0003aa 940e 041f call	Delay2
+C:0003ac 9508      	ret
+         	
+          .DB	" lcd_clr",0x7,1<<EXEC
+C:0003AD 206C63645F636C720708
+          .DW	link
+C:0003b2 0399
+          Lcd_clr1:
+          .SET link=Lcd_clr1
+C:0003b3 e001      	ldi	r16,(1<<LCD_CLR)
+C:0003b4 940e 030d 	call	Lcd_com1
+C:0003b6 2700      	clr	r16
+C:0003b7 9300 0113 	sts	curs_screen,r16
+C:0003b9   +  	PAUSE	152
+C:0003b9 e002      ldi	r16, 0x02 
+
+C:0003ba bd04      out	TCCR0A , r16
+C:0003bb e104      ldi	r16, 0x14 
+
+C:0003bc bd07      out	OCR0A , r16
+C:0003bd 2700      clr	r16 
+
+C:0003be bb05      out	TIFR0 , r16
+C:0003bf bd06      out	TCNT0 , r16
+C:0003c0 e002      ldi	r16, 0x02 
+
+C:0003c1 bd05      out	TCCR0B , r16
+C:0003c2 e0d0      ldi	r29,high(152)
+C:0003c3 e9c8      ldi	r28,low(152)
+C:0003c4 940e 041f call	Delay2
+C:0003c6 9508      	ret
+          error_sp:
+C:0003c7 e6e7      	ldi	ZL, LOW(error_return)
+C:0003c8 e0f0      	ldi	ZH, HIGH(error_return)
+C:0003c9 93ed      	st	X+,ZL
+C:0003ca 93fd      	st	X+,ZH
+C:0003cb 940e 0353 	call 	Sendlcd
+C:0003cd 9508      	ret
+          .DB	".",0x22,0x2,1<<compile
+C:0003CE 2E220220
+          .DW	link
+C:0003d0 03b3
+          pguil:
+          .SET link=pguil
+C:0003d1 9508      	ret
+C:0003d2   +  	ENV0_R16	ESC
+C:0003d2 e10b      ldi	r16,low(ESC) 
+C:0003d3 940e 0135 call	Com0_1
+C:0003d5   +  	ENV0_R16	0x22	; ."
+C:0003d5 e202      ldi	r16,low(0x22) 
+C:0003d6 940e 0135 call	Com0_1
+C:0003d8 940e 0569 	call	Word0
+C:0003da ef44      	ldi	r20,low(_pguil)
+C:0003db e053      	ldi	r21,high(_pguil)
+C:0003dc   +  	COMPILE20
+C:0003dc e00e      ldi	r16,0x0E
+C:0003dd 930d      st	X+,r16
+C:0003de e904      ldi	r16,0x94
+C:0003df 930d      st	X+,r16
+C:0003e0 934d      st	X+,r20
+C:0003e1 935d      st	X+,r21
+C:0003e2 9634      adiw	ZH:ZL,0x04
+C:0003e3 e1cf      	ldi	YL,LOW(wordbuf)	;tampon wordbuf
+C:0003e4 e0d1      	ldi	YH,HIGH(wordbuf)
+C:0003e5 9109      	ld 	r16,Y+
+C:0003e6 2f20      	mov	r18,r16
+          pguil1:
+C:0003e7 9119      	ld	r17,Y+
+C:0003e8 931d      	st	X+,r17
+C:0003e9 9111      	ld	r17,Z+
+C:0003ea 950a      	dec	r16
+C:0003eb f7d9      	brne	pguil1
+C:0003ec 2711      	clr	r17
+C:0003ed 931d      	st	X+,r17
+C:0003ee 9111      	ld	r17,Z+
+C:0003ef fd20      	sbrc	r18,0
+C:0003f0 9508      	ret
+C:0003f1 931d      	st	X+,r17
+C:0003f2 9111      	ld	r17,Z+
+C:0003f3 9508      	ret
+          _pguil:
+C:0003f4 91ff      	pop	ZH
+C:0003f5 91ef      	pop	Zl
+C:0003f6 0fee      	lsl	Zl
+C:0003f7 1fff      	rol	ZH
+          _pguil1:
+C:0003f8 9105      	lpm	r16,Z+
+C:0003f9 3000      	cpi	r16,0
+C:0003fa f019      	breq	_pguil2
+C:0003fb 940e 02e4 	call	Emit1
+C:0003fd cffa      	rjmp	_pguil1
+          _pguil2:
+C:0003fe fde0      	sbrc	ZL,0
+C:0003ff 9631      	adiw	ZH:ZL,1 
+C:000400 95f6      	lsr	ZH
+C:000401 95e7      	ror	Zl
+C:000402 f408      	brcc	_pguil3
+C:000403 9631      	adiw	ZH:ZL,1
+          _pguil3:
+C:000404 93ef      	push	ZL
+C:000405 93ff      	push	ZH
+C:000406 9508      	ret
+         	
+         	
+         
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         ;;;; time
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         
+          Init_delay:
+C:000407 e002      	ldi	r16, (1<<WGM01) ; 0x02 ;mode CTC, compare avec A
+C:000408 bd04      	out	TCCR0A , r16
+         	;ldi	r16, 0x82 ; compare avec A et presacler osc/8
+         	;sts	TCCR0A , r16
+C:000409 e103      	ldi	r16, 0x13 ; pour 10us
+C:00040a bd07      	out	OCR0A , r16
+C:00040b e000      	ldi	r16, 0x0 ; pas d interruption
+C:00040c 9300 006e 	sts	TIMSK0 , r16
+C:00040e 9508      	ret
+          .DB	  " delay",0x5,1<<EXEC
+C:00040F 2064656C61790508
+          .DW	link
+C:000413 03d1
+          Delay:
+          .SET link=Delay
+C:000414 91de      	ld	YH,-X
+C:000415 91ce      	ld	YL,-X
+          Delay1:
+C:000416 e002      	ldi	r16, 0x02 ;mode CTC, compare avec A
+C:000417 bd04      	out	TCCR0A , r16
+C:000418 e108      	ldi	r16, 0x18 ; pour 10us
+C:000419 bd07      	out	OCR0A , r16
+C:00041a 2700      	clr	r16 ;clear flags
+C:00041b bb05      	out	TIFR0 , r16
+C:00041c bd06      	out	TCNT0 , r16
+C:00041d e003      	ldi	r16, (1<<CS00)|(1<<CS01); start timer
+C:00041e bd05      	out	TCCR0B,r16 
+          Delay2:
+C:00041f e803      	ldi	r16,0x83
+C:000420 bd05      	out	TCCR0B,r16 
+C:000421 9aa9      	sbi	TIFR0,OCF0A 
+          Delay3:
+C:000422 9ba9      	sbis	TIFR0,OCF0A ; test flag
+C:000423 cffe      	rjmp	Delay3
+C:000424 9721      	sbiw	YH:YL,1
+C:000425 f7c9      	brne	Delay2
+          Delay4:
+C:000426 e0c0      	ldi	r28, 0x0 ;stop timer0
+C:000427 bdc4      	out	TCCR0A , r28
+C:000428 9508      	ret
+          .DB     " led",0x3,1<<EXEC
+C:000429 206C65640308
+          .DW	link
+C:00042c 0414
+          led:
+          .SET link=led
+          Testled:
+C:00042d 9b2b      	sbis	PORTB,3
+C:00042e c00f      	rjmp	Testled1
+C:00042f 982b      	cbi	PORTB,3
+C:000430   +  	PAUSE 0xFF00
+C:000430 e002      ldi	r16, 0x02 
+
+C:000431 bd04      out	TCCR0A , r16
+C:000432 e104      ldi	r16, 0x14 
+
+C:000433 bd07      out	OCR0A , r16
+C:000434 2700      clr	r16 
+
+C:000435 bb05      out	TIFR0 , r16
+C:000436 bd06      out	TCNT0 , r16
+C:000437 e002      ldi	r16, 0x02 
+
+C:000438 bd05      out	TCCR0B , r16
+C:000439 efdf      ldi	r29,high(0xFF00)
+C:00043a e0c0      ldi	r28,low(0xFF00)
+C:00043b 940e 041f call	Delay2
+C:00043d c00e      	rjmp	Testled2
+          Testled1:
+C:00043e 9a2b      	sbi	PORTB,3
+C:00043f   +  	PAUSE 0xFFF0
+C:00043f e002      ldi	r16, 0x02 
+
+C:000440 bd04      out	TCCR0A , r16
+C:000441 e104      ldi	r16, 0x14 
+
+C:000442 bd07      out	OCR0A , r16
+C:000443 2700      clr	r16 
+
+C:000444 bb05      out	TIFR0 , r16
+C:000445 bd06      out	TCNT0 , r16
+C:000446 e002      ldi	r16, 0x02 
+
+C:000447 bd05      out	TCCR0B , r16
+C:000448 efdf      ldi	r29,high(0xFFF0)
+C:000449 efc0      ldi	r28,low(0xFFF0)
+C:00044a 940e 041f call	Delay2
+          Testled2:
+C:00044c 9b2b      	sbis	PORTB,3
+C:00044d c00f      	rjmp	Testled3
+C:00044e 982b      	cbi	PORTB,3
+C:00044f   +  	PAUSE 0xFF00
+C:00044f e002      ldi	r16, 0x02 
+
+C:000450 bd04      out	TCCR0A , r16
+C:000451 e104      ldi	r16, 0x14 
+
+C:000452 bd07      out	OCR0A , r16
+C:000453 2700      clr	r16 
+
+C:000454 bb05      out	TIFR0 , r16
+C:000455 bd06      out	TCNT0 , r16
+C:000456 e002      ldi	r16, 0x02 
+
+C:000457 bd05      out	TCCR0B , r16
+C:000458 efdf      ldi	r29,high(0xFF00)
+C:000459 e0c0      ldi	r28,low(0xFF00)
+C:00045a 940e 041f call	Delay2
+C:00045c c00e      	rjmp	Testled4
+          Testled3:
+C:00045d 9a2b      	sbi	PORTB,3
+C:00045e   +  	PAUSE 0xFFF0
+C:00045e e002      ldi	r16, 0x02 
+
+C:00045f bd04      out	TCCR0A , r16
+C:000460 e104      ldi	r16, 0x14 
+
+C:000461 bd07      out	OCR0A , r16
+C:000462 2700      clr	r16 
+
+C:000463 bb05      out	TIFR0 , r16
+C:000464 bd06      out	TCNT0 , r16
+C:000465 e002      ldi	r16, 0x02 
+
+C:000466 bd05      out	TCCR0B , r16
+C:000467 efdf      ldi	r29,high(0xFFF0)
+C:000468 efc0      ldi	r28,low(0xFFF0)
+C:000469 940e 041f call	Delay2
+          Testled4:
+C:00046b 9b2b      	sbis	PORTB,3
+C:00046c c00f      	rjmp	Testled5
+C:00046d 982b      	cbi	PORTB,3
+C:00046e   +  	PAUSE 0xFF00
+C:00046e e002      ldi	r16, 0x02 
+
+C:00046f bd04      out	TCCR0A , r16
+C:000470 e104      ldi	r16, 0x14 
+
+C:000471 bd07      out	OCR0A , r16
+C:000472 2700      clr	r16 
+
+C:000473 bb05      out	TIFR0 , r16
+C:000474 bd06      out	TCNT0 , r16
+C:000475 e002      ldi	r16, 0x02 
+
+C:000476 bd05      out	TCCR0B , r16
+C:000477 efdf      ldi	r29,high(0xFF00)
+C:000478 e0c0      ldi	r28,low(0xFF00)
+C:000479 940e 041f call	Delay2
+C:00047b 9508      	ret	
+          Testled5:
+C:00047c 9a2b      	sbi	PORTB,3
+C:00047d   +  	PAUSE 0xFFF0
+C:00047d e002      ldi	r16, 0x02 
+
+C:00047e bd04      out	TCCR0A , r16
+C:00047f e104      ldi	r16, 0x14 
+
+C:000480 bd07      out	OCR0A , r16
+C:000481 2700      clr	r16 
+
+C:000482 bb05      out	TIFR0 , r16
+C:000483 bd06      out	TCNT0 , r16
+C:000484 e002      ldi	r16, 0x02 
+
+C:000485 bd05      out	TCCR0B , r16
+C:000486 efdf      ldi	r29,high(0xFFF0)
+C:000487 efc0      ldi	r28,low(0xFFF0)
+C:000488 940e 041f call	Delay2
+C:00048a 9508      	ret
+         
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         ;;;; I2C
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+          .DB     " twi_s",0x5,1<<EXEC
+C:00048B 207477695F730508
+          .DW	link
+C:00048f 042d
+          FTwi_s:
+          .SET link=FTwi_s
+C:000490 ea04      	ldi	r16, (1<<TWINT)|(1<<TWSTA)|(1<<TWEN)
+C:000491 9300 00bc 	sts	TWCR, r16
+          FTwi_s1:				;Boucle d'attente de transmition START
+C:000493 9100 00bc 	lds	r16,TWCR
+C:000495 ff07      	sbrs	r16,TWINT
+C:000496 cffc      	rjmp	FTwi_s1
+C:000497 9100 00b9 	lds	r16,TWSR	;test bonne reception START
+C:000499 7f08      	andi	r16, 0xF8
+C:00049a 3008      	cpi	r16, START
+C:00049b f529      	brne	ERROR_Twi_s1
+C:00049c 910e      	ld	r16,-X	;Envoi sla+w
+C:00049d 9300 00bb 	sts	TWDR, r16
+C:00049f e804      	ldi	r16, (1<<TWINT) | (1<<TWEN)
+C:0004a0 9300 00bc 	sts	TWCR, r16
+          FTwi_s2:			;Boucle d'attente de transmition SLA+W
+C:0004a2 9100 00bc 	lds	r16,TWCR
+C:0004a4 ff07      	sbrs	r16,TWINT
+C:0004a5 cffc      	rjmp	FTwi_s2
+C:0004a6 9100 00b9 	lds	r16,TWSR	;test bonne reception sla+w
+C:0004a8 7f08      	andi	r16, 0xF8
+C:0004a9 3108      	cpi	r16, S_SLA_ACK
+C:0004aa f4b1      	brne	ERROR_Twi_s1
+C:0004ab 911e      	ld	r17,-X
+          FTwi_s3:
+C:0004ac 910e      	ld	r16,-X
+C:0004ad 9300 00bb 	sts	TWDR, r16	;envoi de donnes
+C:0004af e804      	ldi	r16, (1<<TWINT) | (1<<TWEN)
+C:0004b0 9300 00bc 	sts	TWCR, r16
+          FTwi_s4:
+C:0004b2 9100 00bc 	lds	r16,TWCR
+C:0004b4 ff07      	sbrs	r16,TWINT
+C:0004b5 cffc      	rjmp	FTwi_s4
+C:0004b6 9100 00b9 	lds	r16,TWSR	;test bonne transmition data
+C:0004b8 7f08      	andi	r16, 0xF8
+C:0004b9 3208      	cpi	r16, S_DATA_ACK
+C:0004ba f431      	brne	ERROR_Twi_s1
+C:0004bb 951a      	dec	r17
+C:0004bc f779      	brne	FTwi_s3
+         	;sts	TWDR, r17	;envoi de donnes
+C:0004bd e904      	ldi	r16, (1<<TWINT) | (1<<TWEN)|(1<<TWSTO) ;stop
+C:0004be 9300 00bc 	sts	TWCR, r16
+C:0004c0 9508      	ret
+          ERROR_Twi_s1:
+         	;lds	XL,(DP_save) ; forth tab
+         	;lds	XH,(DP_save+1)
+C:0004c1 9508      	ret;data
+          ERROR_Twi_s11:
+          ERROR_Twi_s2:
+C:0004c2 911e      	ld	r17,-X		;data
+          ERROR_Twi_s3:
+C:0004c3 9508      	ret
+         
+          .DB     " twi_r",0x5,1<<EXEC
+C:0004C4 207477695F720508
+          .DW	link
+C:0004c8 0490
+          FTwi_r:
+          .SET link=FTwi_r
+C:0004c9 ea04      	ldi	r16, (1<<TWINT)|(1<<TWSTA)|(1<<TWEN)
+C:0004ca 9300 00bc 	sts	TWCR, r16
+          FTwi_r1:				;Boucle d'attente de transmition START
+C:0004cc 9100 00bc 	lds	r16,TWCR
+C:0004ce ff07      	sbrs	r16,TWINT
+C:0004cf cffc      	rjmp	FTwi_r1
+C:0004d0 9100 00b9 	lds	r16,TWSR	;test bonne reception START
+C:0004d2 7f08      	andi	r16, 0xF8
+C:0004d3 3008      	cpi	r16, START
+C:0004d4 f511      	brne	ERROR_Twi_r1
+C:0004d5 910e      	ld 	r16,-X	;Envoi sla+w ou sla+r
+C:0004d6 9300 00bb 	sts	TWDR, r16
+C:0004d8 e804      	ldi	r16, (1<<TWINT) | (1<<TWEN)
+C:0004d9 9300 00bc 	sts	TWCR, r16
+          FTwi_r2:			;Boucle d'attente de transmition SLA+W
+C:0004db 9100 00bc 	lds	r16,TWCR
+C:0004dd ff07      	sbrs	r16,TWINT
+C:0004de cffc      	rjmp	FTwi_r2
+C:0004df 9100 00b9 	lds	r16,TWSR	;test bonne reception sla+wr
+C:0004e1 7f08      	andi	r16, 0xF8
+C:0004e2 3400      	cpi	r16, R_SLA_ACK
+C:0004e3 f499      	brne	ERROR_Twi_r2
+C:0004e4 911e      	ld	r17,-X
+          FTwi_r3:	;envoi de donnes
+C:0004e5 e804      	ldi	r16, (1<<TWINT) | (1<<TWEN)
+C:0004e6 9300 00bc 	sts	TWCR, r16
+          FTwi_r4:
+C:0004e8 9100 00bc 	lds	r16,TWCR
+C:0004ea ff07      	sbrs	r16,TWINT
+C:0004eb cffc      	rjmp	FTwi_r4
+C:0004ec 9100 00bc 	lds	r16,TWCR	; reception data
+C:0004ee 930d      	st	X+,r16
+C:0004ef 951a      	dec	r17
+C:0004f0 f7a1      	brne	FTwi_r3
+C:0004f1 910f      	pop	r16
+C:0004f2 930d      	st	X+,r16
+C:0004f3 e904      	ldi	r16, (1<<TWINT)|(1<<TWEN)|(1<<TWSTO) ;stop
+C:0004f4 9300 00bc 	sts	TWCR, r16
+C:0004f6 9508      	ret
+          ERROR_Twi_r1:
+          ERROR_Twi_r2:
+          ERROR_Twi_r3:
+C:0004f7 91a0 0106 	lds	XL,(DP_save) 
+C:0004f9 91b0 0107 	lds	XH,(DP_save+1)
+C:0004fb 2700      	clr	r16
+C:0004fc 930d      	st	X+,r16
+C:0004fd 9508      	ret;data
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+         ;;;; Forth
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+          .DB     " receive",0x7,1<<EXEC
+C:0004FE 20726563656976650708
+          .DW	link
+C:000503 04c9
+          Receive0:
+          .SET link=Receive0
+         	;ENV0_R16	XON ; pret a recevoir
+          Receive01:
+C:000504   +  	ENV0_R16	ACK
+C:000504 e006      ldi	r16,low(ACK) 
+C:000505 940e 0135 call	Com0_1
+C:000507   +  	REC0
+          REC01:
+C:000507 9160 00c0 lds	r22,UCSR0A
+C:000509 ff67      sbrs	r22,RXC0
+C:00050a cffc      rjmp	REC01
+C:00050b 9160 00c6 lds	r22,UDR0
+         	
+          Receive02:	;Affiche
+C:00050d 3461      	cpi	r22,DISPLAY
+C:00050e f419      	brne	Receive03
+C:00050f 940e 037e 	call	Dispcom0
+C:000511 c043      	rjmp	Ok
+         	;REC0_DP		;nbre d'octets
+         	;call	Recv0
+         	;call	Display0
+         	;rjmp	Ok
+         	
+          Receive03:	
+C:000512 3061      	cpi	r22,SOH	;
+C:000513 f451      	brne	Receive04
+C:000514 940e 06d5 	call	Execute1
+C:000516   +  	ENV0_R16	0x4F
+C:000516 e40f      ldi	r16,low(0x4F) 
+C:000517 940e 0135 call	Com0_1
+C:000519   +  	ENV0_R16	0x4B
+C:000519 e40b      ldi	r16,low(0x4B) 
+C:00051a 940e 0135 call	Com0_1
+C:00051c cfe7      	rjmp	Receive0
+C:00051d c037      	rjmp	Ok
+          Receive04:
+C:00051e 3567      	cpi	r22,WRAM	;reception et ecrire RAM 
+C:00051f f4f9      	brne	Receive05
+C:000520   +  	REC0_DP				;adresse RAM
+          REC0_DP1:
+C:000520 9160 00c0 lds	r22,UCSR0A
+C:000522 ff67      sbrs	r22,RXC0
+C:000523 cffc      rjmp	REC0_DP1
+C:000524 9160 00c6 lds	r22,UDR0
+C:000526 936d      st	X+,r22
+C:000527   +  	REC0_DP			
+          REC0_DP1:
+C:000527 9160 00c0 lds	r22,UCSR0A
+C:000529 ff67      sbrs	r22,RXC0
+C:00052a cffc      rjmp	REC0_DP1
+C:00052b 9160 00c6 lds	r22,UDR0
+C:00052d 936d      st	X+,r22
+C:00052e   +  	REC0_DP		;nbre d'octets
+          REC0_DP1:
+C:00052e 9160 00c0 lds	r22,UCSR0A
+C:000530 ff67      sbrs	r22,RXC0
+C:000531 cffc      rjmp	REC0_DP1
+C:000532 9160 00c6 lds	r22,UDR0
+C:000534 936d      st	X+,r22
+C:000535   +  	REC0_DP
+          REC0_DP1:
+C:000535 9160 00c0 lds	r22,UCSR0A
+C:000537 ff67      sbrs	r22,RXC0
+C:000538 cffc      rjmp	REC0_DP1
+C:000539 9160 00c6 lds	r22,UDR0
+C:00053b 936d      st	X+,r22
+C:00053c 940e 0701 	call	Writeram
+C:00053e c016      	rjmp	Ok
+          Receive05:
+C:00053f 3062      	cpi	r22,STX	;reception et ecrire wordbuf,trouve et execute
+C:000540 f429      	brne	In_error
+C:000541 940e 06ac 	call	query2
+C:000543 940e 06d5 	call	execute1
+C:000545 c00f      	rjmp	Ok
+          In_error:
+          Ko:
+C:000546 940e 088e 	call	Restitue
+C:000548   +  	ENV0_R16	LF
+C:000548 e00a      ldi	r16,low(LF) 
+C:000549 940e 0135 call	Com0_1
+C:00054b   +  	ENV0_R16	0x4B
+C:00054b e40b      ldi	r16,low(0x4B) 
+C:00054c 940e 0135 call	Com0_1
+C:00054e   +  	ENV0_R16	0x4F
+C:00054e e40f      ldi	r16,low(0x4F) 
+C:00054f 940e 0135 call	Com0_1
+C:000551   +  	ENV0_R16	LF
+C:000551 e00a      ldi	r16,low(LF) 
+C:000552 940e 0135 call	Com0_1
+C:000554 9508      	ret
+         	
+          Ok:
+C:000555   +  	ENV0_R16	LF
+C:000555 e00a      ldi	r16,low(LF) 
+C:000556 940e 0135 call	Com0_1
+C:000558   +  	ENV0_R16	0x4F
+C:000558 e40f      ldi	r16,low(0x4F) 
+C:000559 940e 0135 call	Com0_1
+C:00055b   +  	ENV0_R16	0x4B
+C:00055b e40b      ldi	r16,low(0x4B) 
+C:00055c 940e 0135 call	Com0_1
+C:00055e   +  	ENV0_R16	LF
+C:00055e e00a      ldi	r16,low(LF) 
+C:00055f 940e 0135 call	Com0_1
+C:000561 cfa2      	rjmp	Receive0
+         	
+          .DB     "word",0x4,1<<EXEC
+C:000562 776F72640408
+          .DW	link
+C:000565 0504
+          Word:
+          .SET link=Word
+C:000566   +  	ENV0_R16	ACK
+C:000566 e006      ldi	r16,low(ACK) 
+C:000567 940e 0135 call	Com0_1
+          Word0:
+C:000569   +  	REC0
+          REC01:
+C:000569 9160 00c0 lds	r22,UCSR0A
+C:00056b ff67      sbrs	r22,RXC0
+C:00056c cffc      rjmp	REC01
+C:00056d 9160 00c6 lds	r22,UDR0
+C:00056f 3062      	cpi	r22,STX	;reception et ecrire wordbuf
+C:000570 f7c1      	brne	Word0
+          Word1:
+C:000571 e1cf      	ldi	YL,LOW(wordbuf)	;tampon wordbuf
+C:000572 e0d1      	ldi	YH,HIGH(wordbuf)
+C:000573   +  	REC0
+          REC01:
+C:000573 9160 00c0 lds	r22,UCSR0A
+C:000575 ff67      sbrs	r22,RXC0
+C:000576 cffc      rjmp	REC01
+C:000577 9160 00c6 lds	r22,UDR0
+C:000579 2f06      	mov	r16,r22
+C:00057a 9309      	st	y+,r16
+C:00057b 2b06      	or	r16,r22
+C:00057c f409      	brne	Word2
+C:00057d 9508      	ret
+          Word2:
+C:00057e   +  	REC0
+          REC01:
+C:00057e 9160 00c0 lds	r22,UCSR0A
+C:000580 ff67      sbrs	r22,RXC0
+C:000581 cffc      rjmp	REC01
+C:000582 9160 00c6 lds	r22,UDR0
+C:000584 9369      	st	Y+,r22
+C:000585 950a      	dec	r16
+C:000586 f7b9      	brne	Word2
+C:000587 9503      	inc	r16
+C:000588 9508      	ret			
+         
+          .DB     " vlist",0x5,1<<EXEC
+C:000589 20766C6973740508
+          .DW	link
+C:00058d 0566
+          Vlist:
+          .SET link=Vlist
+C:00058e   +  	PUSHZ
+C:00058e 93e0 0111 sts	save_z,ZL
+C:000590 93f0 0112 sts	save_z+1,ZH
+C:000592 91e0 0100 	lds	ZL,lastword
+C:000594 91f0 0101 	lds	ZH,lastword+1
+          Vlist1:	
+C:000596 0fee      	lsl	ZL
+C:000597 1fff      	rol	ZH
+          Vlist2:	
+C:000598 9734      	sbiw	ZH:ZL,4
+C:000599 9035      	lpm	r3,Z+	;length of word
+C:00059a 9055      	lpm	r5,Z+	;word type
+C:00059b 9005      	lpm	r0,Z+	; next word
+C:00059c 9015      	lpm	r1,Z+
+C:00059d e210      	ldi	r17,0x20
+C:00059e 931d      	st	X+,r17	;put in data stack
+C:00059f 2c43      	mov	r4,r3
+C:0005a0 9443      	inc	r4
+C:0005a1 9734      	sbiw	ZH:ZL,4
+          Vlist3:
+C:0005a2 9731      	sbiw	ZH:ZL,1
+C:0005a3 9064      	lpm	r6,Z	;read word
+C:0005a4 926d      	st	X+,r6	;put in data stack
+C:0005a5 943a      	dec	r3
+C:0005a6 f7d9      	brne	Vlist3
+C:0005a7 01f0      	movw	ZL,r0	;next word
+C:0005a8 2d84      	mov	r24,r4
+C:0005a9 2799      	clr	r25
+C:0005aa 940e 010a 	call	Send0_1
+C:0005ac 2a0f      	or	r0,ZH
+C:0005ad f741      	brne	Vlist1
+C:0005ae   +  	POPZ	
+C:0005ae 91e0 0111 lds	ZL,save_z
+C:0005b0 91f0 0112 lds	ZH,save_z+1
+C:0005b2 9508      	ret
+         		; zero si pas trouve
+         		
+          .DB     "find",0x4,1<<EXEC
+C:0005B3 66696E640408
+          .DW	link
+C:0005b6 058e
+          find:
+          .SET link=find
+C:0005b7   +  	PUSHZ
+C:0005b7 93e0 0111 sts	save_z,ZL
+C:0005b9 93f0 0112 sts	save_z+1,ZH
+C:0005bb 91e0 0100 	lds	ZL,lastword
+C:0005bd 91f0 0101 	lds	ZH,lastword+1
+C:0005bf e1cf      	ldi	YL,LOW(wordbuf)
+C:0005c0 e0d1      	ldi	YH,HIGH(wordbuf)
+          find1:	
+C:0005c1 93ef      	push	ZL
+C:0005c2 93ff      	push	ZH
+C:0005c3 0fee      	lsl	ZL
+C:0005c4 1fff      	rol	ZH
+          find2:	
+C:0005c5 9734      	sbiw	ZH:ZL,4
+C:0005c6 9035      	lpm	r3,Z+	;length of word
+C:0005c7 9055      	lpm	r5,Z+	;word type
+C:0005c8 9005      	lpm	r0,Z+	; next word
+C:0005c9 9015      	lpm	r1,Z+
+C:0005ca 8068      	ld	r6,Y
+C:0005cb 1436      	cp	r3,r6
+C:0005cc f4c1      	brne	find5
+C:0005cd 9069      	ld	r6,Y+
+C:0005ce 9734      	sbiw	ZH:ZL,4
+C:0005cf 0dc3      	add	YL,r3
+C:0005d0 2466      	clr	r6
+C:0005d1 1dd6      	adc	YH,r6
+          find3:
+C:0005d2 9731      	sbiw	ZH:ZL,1
+C:0005d3 9064      	lpm	r6,Z	;read word
+C:0005d4 904a      	ld	r4,-Y
+C:0005d5 1464      	cp	r6,r4
+C:0005d6 f471      	brne	find5
+C:0005d7 943a      	dec	r3
+C:0005d8 f7c9      	brne	find3
+C:0005d9 91ff      	pop	ZH
+C:0005da 91ef      	pop	ZL
+C:0005db 9250 0110 	sts	type_find,r5
+C:0005dd 93ed      	st	X+,ZL	; mot trouvé
+C:0005de 93fd      	st	X+,ZH
+C:0005df   +  	POPZ
+C:0005df 91e0 0111 lds	ZL,save_z
+C:0005e1 91f0 0112 lds	ZH,save_z+1
+C:0005e3 e001      	ldi	r16,1
+C:0005e4 9508      	ret
+          find5:
+C:0005e5 910f      	pop	r16
+C:0005e6 910f      	pop	r16
+C:0005e7 e1cf      	ldi	YL,LOW(wordbuf)
+C:0005e8 e0d1      	ldi	YH,HIGH(wordbuf)
+C:0005e9 01f0      	movw	r30,r0	;next word
+C:0005ea 2a0f      	or	r0,ZH
+C:0005eb f6a9      	brne	find1
+          find6:
+C:0005ec   +  	POPZ
+C:0005ec 91e0 0111 lds	ZL,save_z
+C:0005ee 91f0 0112 lds	ZH,save_z+1
+C:0005f0 e406      	ldi	r16,low(ko)
+C:0005f1 930d      	st	X+,r16
+C:0005f2 e005      	ldi	r16,high(ko)
+C:0005f3 930d      	st	X+,r16
+C:0005f4 e000      	ldi	r16,0
+C:0005f5 9508      	ret
+         
+          .DB     "number",0x6,1<<NUM
+C:0005F6 6E756D6265720640
+          .DW	link
+C:0005fa 05b7
+          Number1:
+          .SET link=Number1
+C:0005fb e1cf      	ldi	YL,LOW(wordbuf)
+C:0005fc e0d1      	ldi	YH,HIGH(wordbuf)
+C:0005fd 2722      	clr	r18
+C:0005fe 2733      	clr	r19
+C:0005ff 2766      	clr	r22
+C:000600 2777      	clr	r23
+C:000601 90a9      	ld	r10,Y+
+          Number2:
+C:000602 9109      	ld	r16,Y+
+C:000603 5300      	subi	r16,0x30
+C:000604 f170      	brcs	error1
+C:000605 300a      	cpi	r16,0x0A
+C:000606 f018      	brcs	Number3
+C:000607 3101      	cpi	r16,0x11
+C:000608 f150      	brcs	error1
+C:000609 5007      	subi	r16,0x07
+          Number3:
+C:00060a 9110 010e 	lds	r17,base
+C:00060c 1701      	cp	r16,r17		;compare a la base
+C:00060d f52c      	brge	error1
+C:00060e 0f20      	add	r18,r16
+C:00060f f428      	brcc	Number4
+C:000610 9533      	inc	r19
+C:000611 f419      	brne	Number4
+C:000612 9563      	inc	r22
+C:000613 f409      	brne	Number4
+C:000614 9573      	inc	r23
+          Number4:
+C:000615 94aa      	dec	r10
+C:000616 f129      	breq	Number5
+C:000617 9f21      	mul	r18,r17
+C:000618 2c20      	mov	r2,r0
+C:000619 2c31      	mov	r3,r1
+C:00061a 9f31      	mul	r19,r17
+C:00061b 2c40      	mov	r4,r0
+C:00061c 2c51      	mov	r5,r1
+C:00061d 9f61      	mul	r22,r17
+C:00061e 2c60      	mov	r6,r0
+C:00061f 2c71      	mov	r7,r1
+C:000620 9f71      	mul	r23,r17
+C:000621 2c80      	mov	r8,r0
+C:000622 2c91      	mov	r9,r1
+C:000623 0c34      	add	r3,r4
+C:000624 f408      	brcc	Number41
+C:000625 9453      	inc	r5
+          Number41:
+C:000626 0c56      	add	r5,r6
+C:000627 f408      	brcc	Number42
+C:000628 9473      	inc	r7
+          Number42:
+C:000629 0c78      	add	r7,r8
+C:00062a f408      	brcc	Number43
+C:00062b 9483      	inc	r8
+          Number43:
+C:00062c 0c89      	add	r8,r9
+C:00062d f400      	brcc	Number44
+         	;inc	r8
+          Number44:
+C:00062e 2d22      	mov	r18,r2
+C:00062f 2d33      	mov	r19,r3
+C:000630 2d65      	mov	r22,r5
+C:000631 2d77      	mov	r23,r7
+         	
+         	
+C:000632 cfcf      	rjmp	Number2
+          error1:
+C:000633 e406      	ldi	r16,LOW(ko)
+C:000634 930d      	st	X+,r16
+C:000635 e005      	ldi	r16,HIGH(ko)
+C:000636 930d      	st	X+,r16
+C:000637 e100      	ldi	r16,1<<IMMED
+C:000638 9300 0110 	sts	type_find,r16
+C:00063a e000      	ldi	r16,0
+C:00063b 9508      	ret
+          Number5:
+C:00063c e400      	ldi	r16,1<<NUM
+C:00063d 9300 0110 	sts	type_find,r16
+C:00063f 9100 010f 	lds	r16,etat
+C:000641 3005      	cpi	r16,compile
+C:000642 f081      	breq	Number55
+C:000643 2e26      	mov	r2,r22
+C:000644 2a27      	or	r2,r23
+C:000645 f029      	breq	Number51
+C:000646 932d      	st	X+,r18
+C:000647 933d      	st	X+,r19
+C:000648 936d      	st	X+,r22
+C:000649 937d      	st	X+,r23
+C:00064a c002      	rjmp	Number52
+          Number51:
+C:00064b 932d      	st	X+,r18
+C:00064c 933d      	st	X+,r19
+          Number52:
+C:00064d e706      	ldi	r16,LOW(Number555)
+C:00064e 930d      	st	X+,r16
+C:00064f e006      	ldi	r16,HIGH(Number555)
+C:000650 930d      	st	X+,r16
+C:000651 e001      	ldi	r16,1
+C:000652 9508      	ret
+          Number55:
+          Number551:
+C:000653 2e26      	mov	r2,r22
+C:000654 2a27      	or	r2,r23
+C:000655 f0a1      	breq	Number552
+C:000656 e74c      	ldi	r20,LOW(Number6)
+C:000657 e056      	ldi	r21,HIGH(Number6)
+C:000658   +  	COMPILE20
+C:000658 e00e      ldi	r16,0x0E
+C:000659 930d      st	X+,r16
+C:00065a e904      ldi	r16,0x94
+C:00065b 930d      st	X+,r16
+C:00065c 934d      st	X+,r20
+C:00065d 935d      st	X+,r21
+C:00065e 9634      adiw	ZH:ZL,0x04
+C:00065f e004      	ldi	r16,0x04
+C:000660 930d      	st	X+,r16
+C:000661 2700      	clr	r16
+C:000662 930d      	st	X+,r16
+C:000663 932d      	st	X+,r18
+C:000664 933d      	st	X+,r19
+C:000665 936d      	st	X+,r22
+C:000666 937d      	st	X+,r23
+C:000667 9636      	adiw	ZH:ZL,6
+C:000668 e001      	ldi	r16,1
+C:000669 9508      	ret
+          Number552:
+C:00066a e84f      	ldi	r20,LOW(num2)
+C:00066b e056      	ldi	r21,HIGH(num2)
+C:00066c   +  	COMPILE20
+C:00066c e00e      ldi	r16,0x0E
+C:00066d 930d      st	X+,r16
+C:00066e e904      ldi	r16,0x94
+C:00066f 930d      st	X+,r16
+C:000670 934d      st	X+,r20
+C:000671 935d      st	X+,r21
+C:000672 9634      adiw	ZH:ZL,0x04
+C:000673 932d      	st	X+,r18
+C:000674 933d      	st	X+,r19
+C:000675 9632      	adiw	ZH:ZL,2
+          Number555:
+C:000676 e001      	ldi	r16,1
+C:000677 9508      	ret
+         	
+          .DB     "num6",0x4,1<<EXEC
+C:000678 6E756D360408
+          .DW	link
+C:00067b 05fb
+          Number6:
+          .SET link=Number6
+C:00067c 91ff      	pop	ZH
+C:00067d 91ef      	pop	ZL
+C:00067e 0fee      	lsl	ZL
+C:00067f 1fff      	rol	ZH
+C:000680 9105      	lpm	r16,Z+
+C:000681 9115      	lpm	r17,Z+
+          Number61:
+C:000682 9115      	lpm	r17,Z+
+C:000683 931d      	st	X+,r17
+C:000684 950a      	dec	r16
+C:000685 f7e1      	brne	Number61
+C:000686 95f6      	lsr	ZH
+C:000687 95e7      	ror	ZL
+C:000688 93ef      	push	ZL
+C:000689 93ff      	push	ZH
+C:00068a 9508      	ret
+         	
+          .DB     "num2",0x4,1<<EXEC
+C:00068B 6E756D320408
+          .DW	link
+C:00068e 067c
+          num2:
+          .SET link=num2
+C:00068f 91ff      	pop	ZH
+C:000690 91ef      	pop	ZL
+C:000691 0fee      	lsl	ZL
+C:000692 1fff      	rol	ZH
+C:000693 9105      	lpm	r16,Z+
+C:000694 930d      	st	X+,r16
+C:000695 9105      	lpm	r16,Z+
+C:000696 930d      	st	X+,r16
+C:000697 95f6      	lsr	ZH
+C:000698 95e7      	ror	ZL
+C:000699 93ef      	push	ZL
+C:00069a 93ff      	push	ZH
+C:00069b 9508      	ret
+          .DB     " query",0x5,1<<EXEC
+C:00069C 2071756572790508
+          .DW	link
+C:0006a0 068f
+          query:
+          .SET link=query
+C:0006a1   +  	ENV0_R16	ACK
+C:0006a1 e006      ldi	r16,low(ACK) 
+C:0006a2 940e 0135 call	Com0_1
+          query1:
+C:0006a4   +  	REC0
+          REC01:
+C:0006a4 9160 00c0 lds	r22,UCSR0A
+C:0006a6 ff67      sbrs	r22,RXC0
+C:0006a7 cffc      rjmp	REC01
+C:0006a8 9160 00c6 lds	r22,UDR0
+C:0006aa 3062      	cpi	r22,STX	;reception et ecrire wordbuf
+C:0006ab f7c1      	brne	query1
+          query2:
+C:0006ac 940e 0571 	call	Word1
+C:0006ae 940e 05b7 	call	Find
+C:0006b0 6000      	ori	r16,0
+C:0006b1 f421      	brne	query3
+C:0006b2 910e      	ld	r16,-X
+C:0006b3 910e      	ld	r16,-X
+C:0006b4 940e 05fb 	call	Number1
+          query3:
+C:0006b6 9508      	ret
+         	
+          .DB     "adrw",0x4,1<<EXEC
+C:0006B7 616472770408
+          .DW	link
+C:0006ba 06a1
+          adrw:
+          .SET link=adrw
+C:0006bb 940e 06a1 	call	query
+C:0006bd e40e      	ldi	r16,0x4E
+C:0006be 930d      	st	X+,r16
+C:0006bf e10b      	ldi	r16,ESC
+C:0006c0 930d      	st	X+,r16
+C:0006c1 e084      	ldi	r24,4
+C:0006c2 2799      	clr	r25
+C:0006c3 940e 010a 	call	Send0_1
+C:0006c5 9508      	ret
+         	
+         	
+          .DB     "base",0x4,1<<EXEC
+C:0006C6 626173650408
+          .DW	link
+C:0006c9 06bb
+          Base1:
+          .SET link=Base1
+C:0006ca e00e      	ldi	r16,LOW(base)
+C:0006cb 930d      	st	X+,r16
+C:0006cc e001      	ldi	r16,HIGH(base)
+C:0006cd 930d      	st	X+,r16
+C:0006ce 9508      	ret
+         	
+          .DB     " execute",0x7,1<<EXEC
+C:0006CF 20657865637574650708
+          .DW	link
+C:0006d4 06ca
+          Execute1:
+          .SET link=Execute1
+C:0006d5 911e      	ld	r17,-X
+C:0006d6 910e      	ld	r16,-X
+C:0006d7 930f      	push	r16
+C:0006d8 931f      	push	r17
+C:0006d9 9508      	ret
+         
+          .DB     " break",0x5,1<<EXEC
+C:0006DA 20627265616B0508
+          .DW	link
+C:0006de 06d5
+          Break:
+          .SET link=Break
+C:0006df 910f      	pop	r16
+C:0006e0 911f      	pop	r17
+C:0006e1 9508      	ret
+         
+          .DB     " readram",0x7,1<<EXEC
+C:0006E2 207265616472616D0708
+          .DW	link
+C:0006e7 06df
+          Readram:
+          .SET link=Readram
+C:0006e8 93df      	push       YH
+C:0006e9 93cf      	push       YL
+C:0006ea 91de      	ld	YH,-X
+C:0006eb 91ce      	ld	YL,-X
+C:0006ec 919e      	ld	r25,-X
+C:0006ed 918e      	ld	r24,-X
+C:0006ee 939f      	push	r25
+C:0006ef 938f      	push	r24
+          Readram1:
+C:0006f0 9119      	ld	r17,y+
+C:0006f1 931d      	st	x+,r17
+C:0006f2 9701      	sbiw	r25:r24,1
+C:0006f3 f7e1      	brne	readram1
+C:0006f4 918f      	pop	r24
+C:0006f5 919f      	pop	r25
+C:0006f6 938d      	st	x+,r24
+C:0006f7 939d      	st	x+,r25
+C:0006f8 91cf      	pop       YL
+C:0006f9 91df      	pop       YH
+C:0006fa 9508      	ret
+         
+          .DB     "writeram",0x8,1<<EXEC
+C:0006FB 777269746572616D0808
+          .DW	link
+C:000700 06e8
+          Writeram:
+          .SET link=Writeram
+C:000701 93df      	push       YH
+C:000702 93cf      	push       YL
+C:000703 91de      	ld	YH,-X
+C:000704 91ce      	ld	YL,-X
+C:000705 919e      	ld	r25,-X
+C:000706 918e      	ld	r24,-X
+          Writeram1:
+C:000707 911e      	ld	r17,-X
+C:000708 9319      	st	Y+,r17
+C:000709 9701      	sbiw	r25:r24,1
+C:00070a f7e1      	brne	Writeram1
+C:00070b 91cf      	pop       YL
+C:00070c 91df      	pop       YH
+C:00070d 9508      	ret
+          .DB     " writeep",0x7,1<<EXEC
+C:00070E 20777269746565700708
+          .DW	link
+C:000713 0701
+          writeep:
+          .SET link=writeep
+C:000714 b72f      	in	r18,SREG
+C:000715 932f      	push	r18
+C:000716 94f8      	cli
+C:000717 93df              push    YH
+C:000718 93cf              push    YL
+C:000719 91de      	ld	YH,-X
+C:00071a 91ce      	ld	YL,-X
+C:00071b 919e      	ld	r25,-X
+C:00071c 918e      	ld	r24,-X
+         	;cbi EECR,EEPM0	; Write logical one to EEMPE
+         	;cbi EECR,EEPM1	; Start eeprom write by setti 	ng EEP
+          writeep1:
+C:00071d 99f9      	sbic EECR,EEPE
+C:00071e cffe      	rjmp writeep1
+          writeep2:
+C:00071f b727      	in	r18,SPMCSR ; controle flash pas en ecriture
+C:000720 fd20      	sbrc	r18, SPMEN
+C:000721 cffd      	rjmp	writeep2
+C:000722 912e      	ld	r18,-X
+C:000723 bd20      	out EEDR,r18
+C:000724 bdd2      	out	EEARH,YH
+C:000725 bdc1      	out	EEARL,YL
+C:000726 9afa      	sbi EECR,EEMPE	; Write logical one to EEMPE
+C:000727 9af9      	sbi EECR,EEPE	; Start eeprom write by setting EEP
+C:000728 9621      	adiw	YH:YL,1
+C:000729 9701      	sbiw	r25:r24,1
+C:00072a f791      	brne	writeep1
+C:00072b 91cf      	pop    YL
+C:00072c 91df      	pop    YH
+C:00072d 912f      	pop	r18
+C:00072e bf2f      	out	SREG,r18
+C:00072f 9508      	ret
+         
+          .DB     " readeep",0x7,1<<EXEC
+C:000730 20726561646565700708
+          .DW	link
+C:000735 0714
+          readeep:
+          .SET link=readeep
+C:000736 93df              push    YH
+C:000737 93cf              push    YL
+C:000738 91de      	ld	YH,-X
+C:000739 91ce      	ld	YL,-X
+C:00073a 919e      	ld	r25,-X
+C:00073b 918e      	ld	r24,-X
+          readeep0:
+C:00073c 938f      	push	r24
+C:00073d 939f      	push	r25
+          readeep1:
+C:00073e 99f9      	sbic EECR,EEPE
+C:00073f cffe      	rjmp readeep1
+C:000740 bdd2      	out	EEARH,YH
+C:000741 bdc1      	out	EEARL,YL
+C:000742 9af8      	sbi	EECR,EERE
+C:000743 b520      	in	r18,EEDR
+C:000744 932d      	st	X+,r18
+C:000745 9621      	adiw	YH:YL,1
+C:000746 9701      	sbiw	r25:r24,1
+C:000747 f7b1      	brne	readeep1
+C:000748 919f      	pop	r25
+C:000749 918f      	pop	r24
+C:00074a 91cf      	pop    YL
+C:00074b 91df      	pop    YH
+C:00074c 938d      	st	x+,r24
+C:00074d 939d      	st	x+,r25
+C:00074e 9508      	ret
+          .DB     " hex",0x3,1<<EXEC
+C:00074F 206865780308
+          .DW	link
+C:000752 0736
+          Hex:
+          .SET link=Hex
+C:000753 e100      	ldi	r16,0x10
+C:000754 e0d1      	ldi	r29,HIGH(base)
+C:000755 e0ce      	ldi	r28,LOW(base)
+C:000756 9309      	st	Y+,r16
+C:000757 9508      	ret
+          .DB     "deci",0x4,1<<EXEC
+C:000758 646563690408
+          .DW	link
+C:00075b 0753
+          Deci:
+          .SET link=Deci
+C:00075c e00a      	ldi	r16,0x0A
+C:00075d e0d1      	ldi	r29,HIGH(base)
+C:00075e e0ce      	ldi	r28,LOW(base)
+C:00075f 9309      	st	Y+,r16
+C:000760 9508      	ret
+          .DB     " readflash",0x9,1<<EXEC
+C:000761 2072656164666C6173680908
+          .DW	link
+C:000767 075c
+          readflash:
+          .SET link=readflash
+C:000768 91fe      	ld	ZH,-X
+C:000769 91ee      	ld	ZL,-X
+C:00076a 0fee      	lsl	ZL
+C:00076b 1fff      	rol	ZH
+C:00076c 919e      	ld	r25,-X
+C:00076d 918e              ld	r24,-X
+C:00076e 939f      	push	r25
+C:00076f 938f      	push	r24
+          readflash1:
+C:000770 9115      	lpm	r17,Z+
+C:000771 931d      	st	X+,r17
+C:000772 9701      	sbiw	r25:r24,1
+C:000773 f7e1      	brne	readflash1
+C:000774 910f      	pop	r16
+C:000775 930d      	st	X+,r16
+C:000776 910f      	pop	r16
+C:000777 930d      	st	X+,r16
+C:000778 9508      	ret
+         	
+         
+          .DB     ":I",0x2,1<<EXEC
+C:000779 3A490208
+          .DW	link
+C:00077b 0768
+          DpointI:
+          .SET link=DpointI
+C:00077c b70f      	in	r16,SREG	; sauve pour si INT valide
+C:00077d 930f      	push	r16
+C:00077e 94f8      	cli
+C:00077f 940e 07a1 	call	Dpoint0
+C:000781 940e 0801 	call	header
+C:000783 910e      	ld	r16,-X
+C:000784 930f      	push	r16
+C:000785 910e      	ld	r16,-X
+C:000786 930f      	push	r16
+C:000787 910e      	ld	r16,-X
+C:000788 e100      	ldi	r16,1<<IMMED
+C:000789 930d      	st	X+,r16
+C:00078a 910f      	pop	r16
+C:00078b 930d      	st	X+,r16
+C:00078c 910f      	pop	r16
+C:00078d 930d      	st	X+,r16
+C:00078e 940c 079a 	jmp	Dpoint01
+         
+          .DB     " :",0x1,1<<EXEC
+C:000790 203A0108
+          .DW	link
+C:000792 077c
+          Dpoint:
+          .SET link=Dpoint
+C:000793 b70f      	in	r16,SREG	; sauve pour si INT valide
+C:000794 930f      	push	r16
+C:000795 94f8      	cli
+C:000796 940e 07a1 	call	Dpoint0
+C:000798 940e 0801 	call	header
+          Dpoint01:
+C:00079a 940e 0857         call	body
+C:00079c 940e 07c9 	call	Dpoint_end
+C:00079e 910f      	pop	r16	; restaure pour si INT valide
+C:00079f bf0f      	out	SREG,r16
+C:0007a0 9508      	ret
+         
+          Dpoint0:
+C:0007a1 903f      	pop	r3
+C:0007a2 902f      	pop	r2
+C:0007a3 93a0 0106 	sts	(DP_save),XL	;debut DP
+C:0007a5 93b0 0107 	sts	(DP_save+1),XH
+C:0007a7 91e0 0102 	lds	ZL,(dict) ;calcul de l'adresse pour readflash
+C:0007a9 91f0 0103 	lds	ZH,(dict+1)
+          Dpoint1:
+C:0007ab 73ef      	andi	ZL,(PAGESIZE-1)
+C:0007ac f071      	breq	Dpoint2
+C:0007ad 0fee      	lsl	ZL
+C:0007ae 93ed      	st	X+,ZL	; count  octets
+C:0007af 2700      	clr     r16 
+C:0007b0 930d      	st	X+,r16 
+C:0007b1 91e0 0102 	lds	ZL,(dict)
+C:0007b3 7ce0      	andi	ZL,(0x100-PAGESIZE)
+C:0007b4 93ed      	st	X+,ZL
+C:0007b5 93fd      	st	X+,ZH
+C:0007b6 940e 0768 	call	readflash
+C:0007b8 910e      	ld	r16,-X 
+C:0007b9 910e      	ld	r16,-X ;enleve quantite lu
+C:0007ba c004      	rjmp	Dpoint3
+          Dpoint2:
+C:0007bb 91e0 0102 	lds	ZL,(dict)
+C:0007bd 0fee      	lsl	ZL
+C:0007be 1fff      	rol	ZH
+          Dpoint3:
+C:0007bf e005      	ldi	r16,COMPILE
+C:0007c0 9300 010f 	sts	etat,r16
+C:0007c2 ec09      	ldi	r16,low(Dpoint_end)
+C:0007c3 930f      	push	r16
+C:0007c4 e007      	ldi	r16,high(Dpoint_end)
+C:0007c5 930f      	push	r16
+C:0007c6 922f      	push	r2
+C:0007c7 923f      	push	r3
+C:0007c8 9508      	ret
+          Dpoint_end:
+C:0007c9 940e 3e04 	call	ecrireflash
+C:0007cb 3102      	cpi	r16,0x12
+C:0007cc f009      	breq	Dpoint_end1
+C:0007cd 9508      	ret
+          Dpoint_end1:
+C:0007ce 91a0 0106 	lds	XL,(DP_save)	;debut DP
+C:0007d0 91b0 0107 	lds	XH,(DP_save+1)
+C:0007d2 9180 0104 	lds	r24,(free_ram)
+C:0007d4 9190 0105 	lds	r25,(free_ram+1)
+C:0007d6 9680      	adiw	r25:r24,0x20
+C:0007d7 939d      	st	X+,r25
+C:0007d8 938d      	st	X+,r24
+C:0007d9 9100 0104 	lds	r16,(free_ram)
+C:0007db 9110 0105 	lds	r17,(free_ram+1)
+C:0007dd 931d      	st	X+,r17
+C:0007de 930d      	st	X+,r16
+C:0007df 95f6      	lsr	ZH
+C:0007e0 95e7      	ror	ZL
+C:0007e1 93e0 0102 	sts	(dict),ZL
+C:0007e3 93f0 0103 	sts	(dict+1),ZH
+C:0007e5 9100 0102 	lds	r16,(dict)
+C:0007e7 9110 0103 	lds	r17,(dict+1)
+C:0007e9 931d      	st	X+,r17
+C:0007ea 930d      	st	X+,r16
+C:0007eb 9100 010b 	lds	r16,(newword+1)	;nouvelle adresse du dernier mot
+C:0007ed 9300 0101 	sts	(lastword+1),r16
+C:0007ef 930d      	st	X+,r16
+C:0007f0 9100 010a 	lds	r16,(newword)
+C:0007f2 9300 0100 	sts	(lastword),r16
+C:0007f4 930d      	st	X+,r16
+C:0007f5 e008      	ldi	r16,8	;ecrire nouvelles donnees dans eeprom
+C:0007f6 930d      	st	X+,r16
+C:0007f7 2700      	clr	r16,0	
+C:0007f8 930d      	st	X+,r16
+C:0007f9 930d      	st	X+,r16		;adresse des donnees
+C:0007fa 930d      	st	X+,r16
+C:0007fb 940e 0714 	call	writeep
+C:0007fd e000      	ldi	r16,NORMAL
+C:0007fe 9300 010f 	sts	etat,r16
+         	;ENV0_R16	CONT
+C:000800 9508      	ret
+         	
+          header:
+C:000801   +  	ENV0_R16	ACK
+C:000801 e006      ldi	r16,low(ACK) 
+C:000802 940e 0135 call	Com0_1
+          header0:
+C:000804   +  	REC0
+          REC01:
+C:000804 9160 00c0 lds	r22,UCSR0A
+C:000806 ff67      sbrs	r22,RXC0
+C:000807 cffc      rjmp	REC01
+C:000808 9160 00c6 lds	r22,UDR0
+C:00080a 3062      	cpi	r22,STX
+C:00080b f7c1      	brne	header0
+C:00080c   +  	REC0
+          REC01:
+C:00080c 9160 00c0 lds	r22,UCSR0A
+C:00080e ff67      sbrs	r22,RXC0
+C:00080f cffc      rjmp	REC01
+C:000810 9160 00c6 lds	r22,UDR0
+C:000812 2f06      	mov	r16,r22
+C:000813 936f      	push	r22
+C:000814 ff60      	sbrs	r22,0
+C:000815 c002      	rjmp	header1
+C:000816 936d      	st	X+,r22
+C:000817 9161      	ld	r22,Z+
+          header1:
+C:000818   +  	REC0
+          REC01:
+C:000818 9160 00c0 lds	r22,UCSR0A
+C:00081a ff67      sbrs	r22,RXC0
+C:00081b cffc      rjmp	REC01
+C:00081c 9160 00c6 lds	r22,UDR0
+C:00081e 936d      	st	X+,r22
+C:00081f 9631      	adiw	ZH:ZL,1
+C:000820 3261      	cpi	r22,0x21	; test caracteres indesirables
+C:000821 f0e8      	brcs	header3
+C:000822 376f      	cpi	r22,0x7F	; test caracteres indesirables
+C:000823 f4d8      	brcc	header3
+C:000824 950a      	dec	r16
+C:000825 f791      	brne	header1
+C:000826 916f      	pop	r22
+C:000827 936d      	st	X+,r22
+C:000828 9161      	ld	r22,Z+
+C:000829 e008      	ldi	r16,1<<EXEC	;type de mot par default
+C:00082a 930d      	st	X+,r16
+C:00082b 9161      	ld	r22,Z+
+C:00082c 9100 0100 	lds	r16,(lastword)
+C:00082e 930d      	st	X+,r16
+C:00082f 9161      	ld	r22,Z+
+C:000830 9100 0101 	lds	r16,(lastword+1)
+C:000832 930d      	st	X+,r16
+C:000833 9161      	ld	r22,Z+
+C:000834 93ef      	push	ZL
+C:000835 93ff      	push	ZH
+C:000836 95f6      	lsr	ZH
+C:000837 95e7      	ror	ZL
+          header2:
+C:000838 93e0 010a 	sts	(newword),ZL
+C:00083a 93f0 010b 	sts	(newword+1),ZH
+C:00083c 91ff      	pop	ZH
+C:00083d 91ef      	pop	ZL
+C:00083e 9508      	ret
+          header3:
+C:00083f 911f      	pop	r17
+          header4:
+C:000840 9731      	sbiw	ZH:ZL,1
+C:000841 916e      	ld	r22,-X
+C:000842 1701      	cp	r16,r17
+C:000843 f410      	brcc	header5
+C:000844 9503      	inc	r16
+C:000845 cffa      	rjmp	header4
+          header5:
+C:000846 e105      	ldi	r16,NACK	;signale une erreur 
+C:000847 930d      	st	X+,r16
+C:000848 e10b      	ldi	r16,ESC
+C:000849 930d      	st	X+,r16
+C:00084a e082      	ldi	r24,2
+C:00084b 2799      	clr	r25
+C:00084c 940e 010a 	call	Send0_1
+          header6:
+C:00084e   +  	REC0
+          REC01:
+C:00084e 9160 00c0 lds	r22,UCSR0A
+C:000850 ff67      sbrs	r22,RXC0
+C:000851 cffc      rjmp	REC01
+C:000852 9160 00c6 lds	r22,UDR0
+C:000854 3061      	cpi	r22,SOH
+C:000855 f7c1      	brne	header6
+C:000856 cfaa      	rjmp	header
+          body:	
+C:000857 940e 0566 	call	Word
+C:000859 6000      	ori	r16,0
+C:00085a f079      	breq	body1
+C:00085b 940e 05b7 	call	Find
+C:00085d 6000      	ori	r16,0
+C:00085e f421      	brne	body0
+C:00085f 910e      	ld	r16,-X
+C:000860 910e      	ld	r16,-X
+C:000861 940e 05fb 	call	Number1
+          body0:	
+C:000863 9100 0110 	lds	r16,type_find
+C:000865 ff04      	sbrs	r16,IMMED	; mot immediat
+C:000866 c00e      	rjmp	body2
+         	;ENV0_R16	0x49
+C:000867 940e 06d5 	call	Execute1
+C:000869 cfed      	rjmp	body
+          body1:	
+C:00086a 940e 088e 	call	Restitue
+          body11:	
+C:00086c   +  	REC0
+          REC01:
+C:00086c 9160 00c0 lds	r22,UCSR0A
+C:00086e ff67      sbrs	r22,RXC0
+C:00086f cffc      rjmp	REC01
+C:000870 9160 00c6 lds	r22,UDR0
+C:000872 3061      	cpi	r22,SOH
+C:000873 f7c1      	brne	body11
+C:000874 cfe2      	rjmp	body
+          body2:	
+C:000875 ff03      	sbrs	r16,EXEC	; mot a compiler
+C:000876 c00a      	rjmp	body3
+         	;ENV0_R16	0x43
+C:000877 915e      	ld	r21,-X
+C:000878 914e      	ld	r20,-X
+C:000879   +  	COMPILE20
+C:000879 e00e      ldi	r16,0x0E
+C:00087a 930d      st	X+,r16
+C:00087b e904      ldi	r16,0x94
+C:00087c 930d      st	X+,r16
+C:00087d 934d      st	X+,r20
+C:00087e 935d      st	X+,r21
+C:00087f 9634      adiw	ZH:ZL,0x04
+C:000880 cfd6      	rjmp	body
+          body3:	
+C:000881 ff06      	sbrs	r16,NUM	; nombre
+C:000882 c001      	rjmp	body6
+         	;ENV0_R16	0x4E
+C:000883 cfd3      	rjmp	body
+          body6:	
+C:000884 ff05      	sbrs	r16,COMPILE	;mot executable a la compilation uniquement
+C:000885 c008      	rjmp	Restitue
+         	;ENV0_R16	0x45
+C:000886 91de      	ld	YH,-X
+C:000887 91ce      	ld	YL,-X
+C:000888 9621      	adiw	YH:YL,1
+C:000889 93cd      	st	X+,YL
+C:00088a 93dd      	st	X+,YH
+C:00088b 940e 06d5 	call	Execute1
+C:00088d cfc9      	rjmp	body
+         	
+          Restitue:
+C:00088e   +  	ENV0_R16	0x52
+C:00088e e502      ldi	r16,low(0x52) 
+C:00088f 940e 0135 call	Com0_1
+C:000891   +  	ENV0_R16	0x45
+C:000891 e405      ldi	r16,low(0x45) 
+C:000892 940e 0135 call	Com0_1
+C:000894   +  	ENV0_R16	0x53
+C:000894 e503      ldi	r16,low(0x53) 
+C:000895 940e 0135 call	Com0_1
+C:000897   +  	ENV0_R16	0x20
+C:000897 e200      ldi	r16,low(0x20) 
+C:000898 940e 0135 call	Com0_1
+C:00089a e1cf      	ldi	YL,LOW(wordbuf)
+C:00089b e0d1      	ldi	YH,HIGH(wordbuf)
+C:00089c   +  	ENV0_R16	ESC
+C:00089c e10b      ldi	r16,low(ESC) 
+C:00089d 940e 0135 call	Com0_1
+C:00089f   +  	ENV0_R16	REST
+C:00089f e008      ldi	r16,low(REST) 
+C:0008a0 940e 0135 call	Com0_1
+C:0008a2 9109      	ld	r16,Y+
+C:0008a3 2f50      	mov	r21,r16
+C:0008a4   +  	ENV0
+          ENV01:
+C:0008a4 9170 00c0 lds	r23,UCSR0A
+C:0008a6 ff75      sbrs	r23,UDRE0
+C:0008a7 cffc      rjmp	ENV01 
+C:0008a8 9350 00c6 sts	UDR0,r21
+          Restitue1:
+C:0008aa 9159      	ld	r21,Y+
+C:0008ab   +  	ENV0
+          ENV01:
+C:0008ab 9170 00c0 lds	r23,UCSR0A
+C:0008ad ff75      sbrs	r23,UDRE0
+C:0008ae cffc      rjmp	ENV01 
+C:0008af 9350 00c6 sts	UDR0,r21
+C:0008b1 950a      	dec	r16
+C:0008b2 f7b9      	brne	Restitue1
+C:0008b3 9508      	ret
+          .DB     " ;",0x1,1<<COMPILE
+C:0008B4 203B0120
+          .DW	link
+C:0008b6 0793
+          Pvirg:
+          .SET link=Pvirg
+C:0008b7 9508      	ret
+C:0008b8 915f      	pop	r21	;return	Body
+C:0008b9 914f      	pop	r20	
+C:0008ba 901f      	pop	r1	;return	Dpoint_end
+C:0008bb 900f      	pop	r0
+C:0008bc 913f      	pop	r19	;flag Dpoint_end
+C:0008bd 912f      	pop	r18
+C:0008be 3c29      	cpi	r18,LOW(Dpoint_end)
+C:0008bf f4a9      	brne	Pvirg11
+C:0008c0 3037      	cpi	r19,High(Dpoint_end) 
+C:0008c1 f499      	brne	Pvirg111
+C:0008c2 920f      	push	r0	;return	Ddivmod_end
+C:0008c3 921f      	push	r1
+C:0008c4 e008      	ldi	r16,0x08 ;return word
+C:0008c5 930d      	st	X+, r16
+C:0008c6 9101      	ld	r16,Z+
+C:0008c7 e905      	ldi	r16,0x95
+C:0008c8 930d      	st	X+, r16
+C:0008c9 9101      	ld	r16,Z+
+C:0008ca 93ef      	push	ZL
+C:0008cb 93ff      	push	ZH
+C:0008cc 95f6      	lsr	ZH
+C:0008cd 95e7      	ror	ZL
+C:0008ce 93e0 010c 	sts	(newdict),ZL
+C:0008d0 93f0 010d 	sts	(newdict+1),ZH
+C:0008d2 91ff      	pop	ZH
+C:0008d3 91ef      	pop	ZL
+         	;ENV0_R16	0x31
+         	;ENV0_R16	0x31
+C:0008d4 9508      	ret
+          Pvirg1:
+         	;ENV0_R16	0x30
+          Pvirg11:
+         	;ENV0_R16	0x31
+          Pvirg111:
+         	;ENV0_R16	0x32
+         	;ENV0_R16	0x33
+C:0008d5 932f      	push	r18	;flags Dpoint_end
+C:0008d6 933f      	push	r19
+C:0008d7 920f      	push	r0
+C:0008d8 921f      	push	r1
+C:0008d9 934f      	push	r20
+C:0008da 935f      	push	r21
+C:0008db 940c 088e 	jmp	restitue
+         	
+          .DB     " definer",0x7,1<<EXEC
+C:0008DD 20646566696E65720708
+          .DW	link
+C:0008e2 08b7
+          definer:
+          .SET link=definer
+C:0008e3 b70f      	in	r16,SREG	; sauve pour si INT valide
+C:0008e4 930f      	push	r16
+C:0008e5 94f8      	cli
+C:0008e6 940e 07a1 	call	Dpoint0
+C:0008e8 910f      	pop	r16
+C:0008e9 910f      	pop	r16
+C:0008ea ee03      	ldi	r16,low(definer)
+C:0008eb 930f      	push	r16
+C:0008ec e008      	ldi	r16,high(definer)
+C:0008ed 930f      	push	r16
+C:0008ee 940e 0801 	call	header
+C:0008f0 e046      	ldi	r20,LOW(_definer)
+C:0008f1 e059      	ldi	r21,HIGH(_definer)
+C:0008f2   +  	COMPILE20
+C:0008f2 e00e      ldi	r16,0x0E
+C:0008f3 930d      st	X+,r16
+C:0008f4 e904      ldi	r16,0x94
+C:0008f5 930d      st	X+,r16
+C:0008f6 934d      st	X+,r20
+C:0008f7 935d      st	X+,r21
+C:0008f8 9634      adiw	ZH:ZL,0x04
+C:0008f9 940e 0857 	call	body
+C:0008fb 940e 07c9 	call	Dpoint_end
+C:0008fd 910f      	pop	r16	; restaure pour si INT valide
+C:0008fe bf0f      	out	SREG,r16
+C:0008ff 9508      	ret
+         	
+          .DB     "_definer",0x8,1<<EXEC
+C:000900 5F646566696E65720808
+          .DW	link
+C:000905 08e3
+          _definer:
+C:000906 940e 0adb 	call	here
+C:000908 9508      	ret
+         
+          .DB     "does",0x4,1<<compile
+C:000909 646F65730420
+          .DW	link
+C:00090c 08e3
+          does:
+          .SET link=does
+C:00090d 9508      	ret
+C:00090e 903f      	pop	r3	;return	Body
+C:00090f 902f      	pop	r2	
+C:000910 901f      	pop	r1	;return	definer
+C:000911 900f      	pop	r0
+C:000912 913f      	pop	r19	;flag definer
+C:000913 912f      	pop	r18
+C:000914 3038      	cpi	r19,high(definer)
+C:000915 f471      	brne	does1
+C:000916 3e23      	cpi	r18,LOW(definer)
+C:000917 f461      	brne	does1
+C:000918 e342      	ldi	r20,low(_does)
+C:000919 e059      	ldi	r21,high(_does)
+C:00091a   +  	COMPILE20
+C:00091a e00e      ldi	r16,0x0E
+C:00091b 930d      st	X+,r16
+C:00091c e904      ldi	r16,0x94
+C:00091d 930d      st	X+,r16
+C:00091e 934d      st	X+,r20
+C:00091f 935d      st	X+,r21
+C:000920 9634      adiw	ZH:ZL,0x04
+C:000921 ec29      	ldi	r18,low(Dpoint_end)
+C:000922 e037      	ldi	r19,high(Dpoint_end)
+C:000923 c002      	rjmp	does2
+          does1:
+C:000924 940e 088e 	call	restitue
+          does2:
+C:000926 932f      	push	r18	;flags Dpoint_end
+C:000927 933f      	push	r19
+C:000928 920f      	push	r0	;return	definer
+C:000929 921f      	push	r1
+C:00092a 922f      	push	r2	;return	Body
+C:00092b 923f      	push	r3
+C:00092c 9508      	ret
+          .DB     " _does",0x5,1<<EXEC
+C:00092D 205F646F65730508
+          .DW	link
+C:000931 090d
+          _does:
+C:000932 b70f      	in	r16,SREG	; sauve pour si INT valide
+C:000933 930f      	push	r16
+C:000934 94f8      	cli
+C:000935 940e 0ca9 	call	in_r
+C:000937 940e 07a1 	call	Dpoint0
+C:000939 910f      	pop	r16	;flags Dpoint pas besoin
+C:00093a 910f      	pop	r16
+C:00093b 940e 0801 	call	header
+C:00093d e84f      	ldi	r20,LOW(num2)
+C:00093e e056      	ldi	r21,HIGH(num2)
+C:00093f   +  	COMPILE20
+C:00093f e00e      ldi	r16,0x0E
+C:000940 930d      st	X+,r16
+C:000941 e904      ldi	r16,0x94
+C:000942 930d      st	X+,r16
+C:000943 934d      st	X+,r20
+C:000944 935d      st	X+,r21
+C:000945 9634      adiw	ZH:ZL,0x04
+C:000946 940e 0cb5 	call	out_r
+C:000948 9632      	adiw	ZH:ZL,2
+C:000949 e00c      	ldi	r16,0x0C	; JMP apres does
+C:00094a 930d      	st	X+,r16
+C:00094b e904      	ldi	r16,0X94
+C:00094c 930d      	st	X+,r16
+C:00094d 912f      	pop	r18	;sreg
+C:00094e 911f      	pop	r17	;adresse apres does pour jump
+C:00094f 910f      	pop	r16
+C:000950 932f      	push	r18
+C:000951 930d      	st	X+,r16
+C:000952 931d      	st	X+,r17
+C:000953 9634      	adiw	ZH:ZL,0x04
+C:000954 940e 07c9 	call	Dpoint_end
+C:000956 910f      	pop	r16	; restaure pour si INT valide
+C:000957 bf0f      	out	SREG,r16
+C:000958 2700      	clr	r16
+C:000959 9508      	ret
+          .DB      " var",3,1<<EXEC
+C:00095A 207661720308
+          .DW	link
+C:00095d 090d
+          var:
+          .SET link=var
+C:00095e 940e 0906 	call	_definer
+C:000960 940e 068f 	call	num2
+          .DW	0x02
+C:000962 0002
+C:000963 940e 096d 	call	allot
+C:000965 940e 0932 	call	_does
+C:000967 9508      	ret
+          .DB     " allot",0x5,1<<EXEC
+C:000968 20616C6C6F740508
+          .DW	link
+C:00096c 095e
+          allot:
+          .SET link=allot
+C:00096d 909e      	ld	r9,-X
+C:00096e 908e      	ld	r8,-X
+C:00096f 2ca9      	mov	r10,r9
+C:000970 28a8      	or	r10,r8
+C:000971 f199      	breq	allot2
+C:000972 9180 0104 	lds	r24,free_ram
+C:000974 9190 0105 	lds	r25,free_ram+1
+C:000976 938d      	st	X+,r24	; adresse premiere cells
+C:000977 939d      	st	X+,r25
+C:000978 2fdb      	mov	YH,XH
+C:000979 2fca      	mov	YL,XL
+C:00097a 0dc8      	add	YL,r8
+C:00097b 1dd9      	adc	YH,r9
+C:00097c 93cf      	push	YL
+C:00097d 93df      	push	YH
+C:00097e 9680      	adiw	r25:r24,0x20
+          allot1:
+C:00097f 900e      	ld	r0,-X
+C:000980 920a      	st	-Y,r0
+C:000981 178a      	cp	r24,XL
+C:000982 f7e1      	brne	allot1
+C:000983 179b      	cp	r25,XH
+C:000984 f7d1      	brne	allot1
+C:000985 91bf      	pop	XH	;nouveau fin de pile
+C:000986 91af      	pop	XL
+C:000987 93cd      	st	X+,YL	;nouveau debut de pile
+C:000988 93dd      	st	X+,YH
+C:000989 97a0      	sbiw	YH:YL,0x20	;nouveau debut ram libre
+C:00098a 93cd      	st	X+,YL
+C:00098b 93dd      	st	X+,YH
+C:00098c 93c0 0104 	sts	(free_ram),YL
+C:00098e 93d0 0105 	sts	(free_ram+1),YH
+C:000990 e004      	ldi	r16,4	;ecrire nouvelles donnees dans eeprom
+C:000991 930d      	st	X+,r16
+C:000992 2700      	clr	r16	
+C:000993 930d      	st	X+,r16
+C:000994 e004      	ldi	r16,4	;adresse des donnees
+C:000995 930d      	st	X+,r16
+C:000996 2700      	clr	r16	
+C:000997 930d      	st	X+,r16
+C:000998 940e 0714 	call	writeep
+C:00099a 91c0 0106 	lds	YL,DP_save
+C:00099c 91d0 0107 	lds	YH,DP_save+1
+C:00099e 0dc8      	add	YL,r8
+C:00099f 1dd9      	adc	YH,r9
+C:0009a0 93c0 0106 	sts	DP_save,YL
+C:0009a2 93d0 0107 	sts	DP_save+1,YH
+C:0009a4 c006      	rjmp	allot3
+          allot2:
+C:0009a5 9180 0104 	lds	r24,(free_ram)	;adresse si erreur
+C:0009a7 938d      	st	X+,r24
+C:0009a8 9190 0105 	lds	r25,(free_ram+1)
+C:0009aa 939d      	st	X+,r25
+          allot3:
+C:0009ab 9508      	ret
+         
+          .DB     "z1",0x2,1<<EXEC
+C:0009AC 7A310208
+          .DW	link
+C:0009ae 096d
+          z1:
+          .SET link=z1
+C:0009af 2766      	clr	r22
+C:0009b0 936d      	st	X+,r22
+C:0009b1 9508      	ret
+         
+          .DB     "dup1",0x4,1<<EXEC
+C:0009B2 647570310408
+          .DW	link
+C:0009b5 09af
+          dup1:
+          .SET link=dup1
+C:0009b6 910e      	ld	r16,-X
+C:0009b7 930d      	st	X+,r16
+C:0009b8 930d      	st	X+,r16
+C:0009b9 9508      	ret
+         
+          .DB     " dup",0x3,1<<EXEC
+C:0009BA 206475700308
+          .DW	link
+C:0009bd 09b6
+          dup:
+          .SET link=dup
+C:0009be 910e      	ld	r16,-X
+C:0009bf 911e      	ld	r17,-X
+C:0009c0 931d      	st	X+,r17
+C:0009c1 930d      	st	X+,r16
+C:0009c2 931d      	st	X+,r17
+C:0009c3 930d      	st	X+,r16
+C:0009c4 9508      	ret
+         
+          .DB     " swap1",0x5,1<<EXEC
+C:0009C5 2073776170310508
+          .DW	link
+C:0009c9 09be
+          swap1:
+          .SET link=swap1
+C:0009ca 910e      	ld	r16,-X
+C:0009cb 911e      	ld	r17,-X
+C:0009cc 930d      	st	X+,r16
+C:0009cd 931d      	st	X+,r17
+C:0009ce 9508      	ret
+         
+          .DB     "swap",0x4,1<<EXEC
+C:0009CF 737761700408
+          .DW	link
+C:0009d2 09ca
+          swap:
+          .SET link=swap
+C:0009d3 910e      	ld	r16,-X
+C:0009d4 911e      	ld	r17,-X
+C:0009d5 912e      	ld	r18,-X
+C:0009d6 913e      	ld	r19,-X
+C:0009d7 931d      	st	X+,r17
+C:0009d8 930d      	st	X+,r16
+C:0009d9 933d      	st	X+,r19
+C:0009da 932d      	st	X+,r18
+C:0009db 9508      	ret
+         
+          .DB     " drop1",0x5,1<<EXEC
+C:0009DC 2064726F70310508
+          .DW	link
+C:0009e0 09d3
+          drop1:
+          .SET link=drop1
+C:0009e1 910e      	ld	r16,-X
+C:0009e2 9508      	ret
+         
+          .DB     "drop",0x4,1<<EXEC
+C:0009E3 64726F700408
+          .DW	link
+C:0009e6 09e1
+          drop:
+          .SET link=drop
+C:0009e7 910e      	ld	r16,-X
+C:0009e8 910e      	ld	r16,-X
+C:0009e9 9508      	ret
+         
+          .DB     " over1",0x5,1<<EXEC
+C:0009EA 206F766572310508
+          .DW	link
+C:0009ee 09e7
+          over1:
+          .SET link=over1
+C:0009ef 902e      	ld	r2,-X
+C:0009f0 903e      	ld	r3,-X
+C:0009f1 923d      	st	X+,r3
+C:0009f2 922d      	st	X+,r2
+C:0009f3 923d      	st	X+,r3
+C:0009f4 9508      	ret
+         	
+          .DB     "over",0x4,1<<EXEC
+C:0009F5 6F7665720408
+          .DW	link
+C:0009f8 09ef
+          over:
+          .SET link=over
+C:0009f9 902e      	ld	r2,-X
+C:0009fa 903e      	ld	r3,-X
+C:0009fb 904e      	ld	r4,-X
+C:0009fc 905e      	ld	r5,-X
+C:0009fd 925d      	st	X+,r5
+C:0009fe 924d      	st	X+,r4
+C:0009ff 923d      	st	X+,r3
+C:000a00 922d      	st	X+,r2
+C:000a01 925d      	st	X+,r5
+C:000a02 924d      	st	X+,r4
+C:000a03 9508      	ret
+         
+          .DB     "rot1",0x4,1<<EXEC
+C:000A04 726F74310408
+          .DW	link
+C:000a07 09f9
+          rot1:
+          .SET link=rot1
+C:000a08 902e      	ld	r2,-X
+C:000a09 903e      	ld	r3,-X
+C:000a0a 904e      	ld	r4,-X
+C:000a0b 923d      	st	X+,r3
+C:000a0c 922d      	st	X+,r2
+C:000a0d 924d      	st	X+,r4
+C:000a0e 9508      	ret
+          .DB     " rot",0x3,1<<EXEC
+C:000A0F 20726F740308
+          .DW	link
+C:000a12 0a08
+          rot:
+          .SET link=rot
+C:000a13 902e      	ld	r2,-X
+C:000a14 903e      	ld	r3,-X
+C:000a15 904e      	ld	r4,-X
+C:000a16 905e      	ld	r5,-X
+C:000a17 906e      	ld	r6,-X
+C:000a18 907e      	ld	r7,-X
+C:000a19 925d      	st	X+,r5
+C:000a1a 924d      	st	X+,r4
+C:000a1b 923d      	st	X+,r3
+C:000a1c 922d      	st	X+,r2
+C:000a1d 927d      	st	X+,r7
+C:000a1e 926d      	st	X+,r6
+C:000a1f 9508      	ret
+          .DB     "pick",0x4,1<<EXEC
+C:000A20 7069636B0408
+          .DW	link
+C:000a23 0a13
+          pick:
+          .SET link=pick
+C:000a24 91de      	ld	YH,-X
+C:000a25 91ce      	ld	YL,-X
+C:000a26 0fcc      	lsl	YL
+C:000a27 1fdd      	rol	YH
+C:000a28 93af      	push	XL
+C:000a29 93bf      	push	XH
+C:000a2a 1bac      	sub	XL,YL
+C:000a2b 0bbd      	sbc	XH,YH
+C:000a2c 91cd      	ld	YL,X+
+C:000a2d 91dd      	ld	YH,X+
+C:000a2e 91bf      	pop	XH
+C:000a2f 91af      	pop	XL
+C:000a30 93cd      	st	X+,YL
+C:000a31 93dd      	st	X+,YH
+C:000a32 9508      	ret
+          .DB     " pick1",0x5,1<<EXEC
+C:000A33 207069636B310508
+          .DW	link
+C:000a37 0a24
+          pick1:
+          .SET link=pick1
+C:000a38 91de      	ld	YH,-X
+C:000a39 91ce      	ld	YL,-X
+C:000a3a 93af      	push	XL
+C:000a3b 93bf      	push	XH
+C:000a3c 1bac      	sub	XL,YL
+C:000a3d 0bbd      	sbc	XH,YH
+C:000a3e 91cd      	ld	YL,X+
+C:000a3f 91bf      	pop	XH
+C:000a40 91af      	pop	XL
+C:000a41 93cd      	st	X+,YL
+C:000a42 9508      	ret
+          .DB     "roll",0x4,1<<EXEC
+C:000A43 726F6C6C0408
+          .DW	link
+C:000a46 0a38
+          roll2:
+          .SET link=roll2
+C:000a47 91de      	ld	YH,-X
+C:000a48 91ce      	ld	YL,-X
+C:000a49 0fcc      	lsl	YL
+C:000a4a 1fdd      	rol	YH
+C:000a4b 93af      	push	XL
+C:000a4c 93bf      	push	XH
+C:000a4d 1bac      	sub	XL,YL
+C:000a4e 0bbd      	sbc	XH,YH
+C:000a4f 9722      	sbiw	YH:YL,2
+C:000a50 f049      	breq	roll22
+C:000a51 01fd      	movw	ZH:ZL,XH:XL
+C:000a52 9001      	ld	r0,Z+
+C:000a53 9011      	ld	r1,Z+
+          roll21:
+C:000a54 9021      	ld	r2,Z+
+C:000a55 922d      	st	X+,r2
+C:000a56 9721      	sbiw	YH:YL,1
+C:000a57 f7e1      	brne	roll21
+C:000a58 920d      	st	X+,r0
+C:000a59 921d      	st	X+,r1
+          roll22:
+C:000a5a 91bf      	pop	XH
+C:000a5b 91af      	pop	XL
+C:000a5c 9508      	ret
+          .DB     " roll1",0x5,1<<EXEC
+C:000A5D 20726F6C6C310508
+          .DW	link
+C:000a61 0a47
+          roll1:
+          .SET link=roll1
+C:000a62 91de      	ld	YH,-X
+C:000a63 91ce      	ld	YL,-X
+C:000a64 93af      	push	XL
+C:000a65 93bf      	push	XH
+C:000a66 1bac      	sub	XL,YL
+C:000a67 0bbd      	sbc	XH,YH
+C:000a68 9721      	sbiw	YH:YL,1
+C:000a69 f039      	breq	roll12
+C:000a6a 01fd      	movw	ZH:ZL,XH:XL
+C:000a6b 9001      	ld	r0,Z+
+          roll11:
+C:000a6c 9021      	ld	r2,Z+
+C:000a6d 922d      	st	X+,r2
+C:000a6e 9721      	sbiw	YH:YL,1
+C:000a6f f7e1      	brne	roll11
+C:000a70 920d      	st	X+,r0
+          roll12:
+C:000a71 91bf      	pop	XH
+C:000a72 91af      	pop	XL
+C:000a73 9508      	ret
+          .DB     "c!",0x2,1<<EXEC
+C:000A74 63210208
+          .DW	link
+C:000a76 0a62
+          Cwrite:
+          .SET link=Cwrite
+C:000a77 91de      	ld	r29,-X
+C:000a78 91ce      	ld	r28,-X
+C:000a79 904e      	ld	r4,-X
+C:000a7a 904e      	ld	r4,-X
+C:000a7b 9249      	st	Y+,r4
+C:000a7c 9508      	ret
+          .DB     " !",0x1,1<<EXEC
+C:000A7D 20210108
+          .DW	link
+C:000a7f 0a77
+          write:
+          .SET link=write
+C:000a80 91de      	ld	r29,-X
+C:000a81 91ce      	ld	r28,-X
+C:000a82 905e      	ld	r5,-X
+C:000a83 904e      	ld	r4,-X
+C:000a84 9249      	st	Y+,r4
+C:000a85 9259      	st	Y+,r5
+C:000a86 9508      	ret
+          .DB     "c@",0x2,1<<EXEC
+C:000A87 63400208
+          .DW	link
+C:000a89 0a80
+          Cread:
+          .SET link=Cread
+C:000a8a 91de      	ld	r29,-X
+C:000a8b 91ce      	ld	r28,-X
+C:000a8c 9049      	ld	r4,y+
+C:000a8d 924d      	st	X+,r4
+C:000a8e 2455      	clr	r5
+C:000a8f 925d      	st	X+,r5
+C:000a90 9508      	ret
+          .DB     " @",0x1,1<<EXEC
+C:000A91 20400108
+          .DW	link
+C:000a93 0a8a
+          read:
+          .SET link=read
+C:000a94 91de      	ld	r29,-X
+C:000a95 91ce      	ld	r28,-X
+C:000a96 9049      	ld	r4,Y+
+C:000a97 9059      	ld	r5,y+
+C:000a98 924d      	st	X+,r4
+C:000a99 925d      	st	X+,r5
+C:000a9a 9508      	ret
+          .DB     "c,",0x2,1<<EXEC
+C:000A9B 632C0208
+          .DW	link
+C:000a9d 0a94
+          Cvirg:
+          .SET link=Cvirg
+C:000a9e b70f      	in	r16,SREG	; sauve pour si INT valide
+C:000a9f 94f8      	cli
+C:000aa0 930f      	push	r16
+C:000aa1 910e      	ld	r16,-X
+C:000aa2 ff00      	sbrs	r16,0
+C:000aa3 c001      	rjmp	Cvirg1
+C:000aa4 9503      	inc	r16
+          Cvirg1:
+C:000aa5 2f20      	mov 	r18,r16	; nombre de donnees sauvegarde
+          Cvirg2:
+C:000aa6 911e      	ld	r17,-X
+C:000aa7 931f      	push 	r17
+C:000aa8 950a      	dec	r16
+C:000aa9 f7e1      	brne	Cvirg2
+C:000aaa 932f      	push	r18
+C:000aab 940e 07a1 	call	Dpoint0	
+C:000aad 910f      	pop	r16	;flags Dpoint pas besoin
+C:000aae 910f      	pop	r16
+C:000aaf 910f      	pop	r16	; nombre de donnees
+          Cvirg3:
+C:000ab0 911f      	pop	r17
+C:000ab1 931d      	st	X+,r17
+C:000ab2 9111      	ld	r17,Z+
+C:000ab3 950a      	dec	r16
+C:000ab4 f7d9      	brne	Cvirg3
+C:000ab5 940e 07c9 	call	Dpoint_end
+C:000ab7 910f      	pop	r16	; restaure pour si INT valide
+C:000ab8 bf0f      	out	SREG,r16
+C:000ab9 9508      	ret
+          .DB     " ,",0x1,1<<EXEC
+C:000ABA 202C0108
+          .DW	link
+C:000abc 0a9e
+          Virg:
+          .SET link=Virg
+C:000abd b70f      	in	r16,SREG	; sauve pour si INT valide
+C:000abe 930f      	push	r16
+C:000abf 94f8      	cli
+C:000ac0 940e 0ca9 	call	in_r
+C:000ac2 940e 07a1 	call	Dpoint0	
+C:000ac4 910f      	pop	r16	;flags Dpoint pas besoin
+C:000ac5 910f      	pop	r16
+C:000ac6 940e 0cb5 	call	out_r
+C:000ac8 9101      	ld	r16,Z+
+C:000ac9 9101      	ld	r16,Z+
+C:000aca 940e 07c9 	call	Dpoint_end
+C:000acc 910f      	pop	r16	; restaure pour si INT valide
+C:000acd bf0f      	out	SREG,r16
+C:000ace 9508      	ret
+          Virg3: 
+          .DB     "DP",0x2,1<<EXEC
+C:000ACF 44500208
+          .DW	link
+C:000ad1 0abd
+          DP:
+          .SET link=DP
+C:000ad2 2e2a      	mov	r2,XL
+C:000ad3 2e3b      	mov	r3,XH
+C:000ad4 922d      	st	X+,r2
+C:000ad5 923d      	st	X+,r3
+C:000ad6 9508      	ret
+          .DB     "here",0x4,1<<EXEC
+C:000AD7 686572650408
+          .DW	link
+C:000ada 0ad2
+          here:
+          .SET link=here
+C:000adb 9020 0102 	lds	r2,dict
+C:000add 9030 0103 	lds	r3,dict+1
+C:000adf 922d      	st	X+,r2
+C:000ae0 923d      	st	X+,r3
+C:000ae1 9508      	ret
+          .DB     "do",0x2,1<<COMPILE
+C:000AE2 646F0220
+          .DW	link
+C:000ae4 0adb
+          do:
+          .SET link=do
+C:000ae5 9508      	ret
+C:000ae6 901f      	pop	r1
+C:000ae7 900f      	pop	r0
+C:000ae8 ef4a      	ldi	r20,low(_do)
+C:000ae9 e05a      	ldi	r21,high(_do)
+C:000aea 934f      	push	r20
+C:000aeb 935f      	push	r21
+C:000aec 920f      	push	r0
+C:000aed 921f      	push	r1
+C:000aee   +  	COMPILE20
+C:000aee e00e      ldi	r16,0x0E
+C:000aef 930d      st	X+,r16
+C:000af0 e904      ldi	r16,0x94
+C:000af1 930d      st	X+,r16
+C:000af2 934d      st	X+,r20
+C:000af3 935d      st	X+,r21
+C:000af4 9634      adiw	ZH:ZL,0x04
+C:000af5 9508      	ret
+         	
+          .DB     " _do",0x3,1<<COMPILE
+C:000AF6 205F646F0320
+          .DW	link
+C:000af9 0ae5
+          _do:
+C:000afa 911f      	pop	r17	; adresse apres do
+C:000afb 910f      	pop	r16
+C:000afc 930f      	push	r16
+C:000afd 931f      	push	r17
+C:000afe 903e      	ld	r3,-X	;index I
+C:000aff 902e      	ld	r2,-X
+C:000b00 901e      	ld	r1,-X	;limit de  I
+C:000b01 900e      	ld	r0,-X
+C:000b02 920f      	push	r0
+C:000b03 921f      	push	r1
+C:000b04 922f      	push	r2
+C:000b05 923f      	push	r3
+C:000b06 930f      	push	r16	; adresse apres do
+C:000b07 931f      	push	r17
+C:000b08 9508      	ret
+         
+          .DB     "loop",0x4,1<<COMPILE
+C:000B09 6C6F6F700420
+          .DW	link
+C:000b0c 0ae5
+          loop:
+          .SET link=loop
+C:000b0d 9508      	ret
+C:000b0e 901f      	pop	r1	;adresse de retour
+C:000b0f 900f      	pop	r0
+C:000b10 911f      	pop	r17	;verifie do
+C:000b11 910f      	pop	r16
+C:000b12 3f0a      	cpi	r16,low(_do)
+C:000b13 f471      	brne	loop1
+C:000b14 301a      	cpi	r17,high(_do)
+C:000b15 f461      	brne	loop1
+C:000b16 e24d      	ldi	r20,low(_loop)
+C:000b17 e05b      	ldi	r21,high(_loop)
+C:000b18 920f      	push	r0	;adresse de retour
+C:000b19 921f      	push	r1
+C:000b1a   +  	COMPILE20
+C:000b1a e00e      ldi	r16,0x0E
+C:000b1b 930d      st	X+,r16
+C:000b1c e904      ldi	r16,0x94
+C:000b1d 930d      st	X+,r16
+C:000b1e 934d      st	X+,r20
+C:000b1f 935d      st	X+,r21
+C:000b20 9634      adiw	ZH:ZL,0x04
+C:000b21 9508      	ret
+          loop1:
+C:000b22 930f      	push	r16	;verifie do
+C:000b23 931f      	push	r17
+C:000b24 920f      	push	r0	;adresse de retour
+C:000b25 921f      	push	r1
+C:000b26 940c 088e 	jmp	restitue
+         	
+          .DB     " _loop",0x5,1<<COMPILE
+C:000B28 205F6C6F6F700520
+          .DW	link
+C:000b2c 0b0d
+          _loop:
+C:000b2d 901f      	pop	r1	;adresse de retour apres loop
+C:000b2e 900f      	pop	r0
+C:000b2f 919f      	pop	r25	;index I
+C:000b30 918f      	pop	r24
+C:000b31 903f      	pop	r3	;limit de I
+C:000b32 902f      	pop	r2
+C:000b33 1593      	cp	r25,r3
+C:000b34 f038      	brlo	_loop2
+C:000b35 1582      	cp	r24,r2
+C:000b36 f028      	brlo	_loop2
+          _loop1:
+C:000b37 911f      	pop	r17	;adresse apres do, fin de boucle
+C:000b38 910f      	pop	r16
+C:000b39 920f      	push	r0	;fin de boucle
+C:000b3a 921f      	push	r1
+C:000b3b 9508      	ret
+          _loop2:
+C:000b3c 9601      	adiw	r25:r24,1
+C:000b3d 901f      	pop	r1	;adresse apres do
+C:000b3e 900f      	pop	r0
+C:000b3f 920f      	push	r0
+C:000b40 921f      	push	r1
+C:000b41 922f      	push	r2	;limit de I
+C:000b42 923f      	push	r3
+C:000b43 938f      	push	r24	;index I
+C:000b44 939f      	push	r25
+C:000b45 920f      	push	r0	;adresse apres do
+C:000b46 921f      	push	r1
+C:000b47 9508      	ret
+         	
+          .DB     "if",0x2,1<<COMPILE
+C:000B48 69660220
+          .DW	link
+C:000b4a 0b0d
+          if:
+          .SET link=if
+C:000b4b 9508      	ret
+C:000b4c 913f      	pop	r19
+C:000b4d 912f      	pop	r18
+C:000b4e e101      	ldi	r16,0x11	; BRNE
+C:000b4f 930d      	st	X+,r16
+C:000b50 ef04      	ldi	r16,0XF4
+C:000b51 930d      	st	X+,r16
+C:000b52 e00c      	ldi	r16,0x0C	; JMP
+C:000b53 930d      	st	X+,r16
+C:000b54 e904      	ldi	r16,0X94
+C:000b55 930d      	st	X+,r16
+C:000b56 93af      	push	XL	; stocke adresse de JMP
+C:000b57 93bf      	push	XH
+C:000b58 930d      	st	X+,r16 ;resserve pour adressse de JMP
+C:000b59 2700      	clr	r16
+C:000b5a 930d      	st	X+,r16
+C:000b5b 9636      	adiw	ZH:ZL,6
+C:000b5c e001      	ldi	r16,0X01 ; controle 0x0001 pour then 0x0002 apres else
+C:000b5d 930f      	push	r16
+C:000b5e 2700      	clr	r16
+C:000b5f 930f      	push	r16
+C:000b60 932f      	push	r18
+C:000b61 933f      	push	r19
+C:000b62 9508      	ret
+         	
+          .DB     "then",0x4,1<<COMPILE
+C:000B63 7468656E0420
+          .DW	link
+C:000b66 0b4b
+          Then:
+          .SET link=then
+C:000b67 9508      	ret
+C:000b68 913f      	pop	r19	;adresse de retour
+C:000b69 912f      	pop	r18
+C:000b6a 911f      	pop	r17	;verifie if
+C:000b6b 910f      	pop	r16
+C:000b6c 3010      	cpi	r17,0
+C:000b6d f421      	brne	Then1
+C:000b6e 3001      	cpi	r16,0x01	; sans else
+C:000b6f f041      	breq	Then2
+C:000b70 3002      	cpi	r16,0x02	; avec else
+C:000b71 f031      	breq	Then2
+          Then1:
+C:000b72 930f      	push	r16
+C:000b73 931f      	push	r17
+C:000b74 932f      	push	r18
+C:000b75 933f      	push	r19
+C:000b76 940c 088e 	jmp	restitue
+         	
+          Then2:
+C:000b78 91df      	pop	YH	;Then
+C:000b79 91cf      	pop	YL
+C:000b7a 2700      	clr	r16	; nop pour then
+C:000b7b 930d      	st	X+,r16
+C:000b7c 930d      	st	X+,r16
+C:000b7d 9632      	adiw	ZH:ZL,2
+C:000b7e 93ef      	push	ZL
+C:000b7f 93ff      	push	ZH
+C:000b80 95f6      	lsr	ZH
+C:000b81 95e7      	ror	ZL
+C:000b82 93e9      	st	Y+,ZL	;adresse de saut apres if
+C:000b83 93f9      	st	Y+,ZH
+C:000b84 91ff      	pop	ZH
+C:000b85 91ef      	pop	ZL
+C:000b86 932f      	push	r18
+C:000b87 933f      	push	r19
+C:000b88 9508      	ret
+         	
+          .DB     "else",0x4,1<<COMPILE
+C:000B89 656C73650420
+          .DW	link
+C:000b8c 0b67
+          Else:
+          .SET link=Else
+C:000b8d 9508      	ret
+C:000b8e 913f      	pop	r19	;adresse de retour
+C:000b8f 912f      	pop	r18
+C:000b90 911f      	pop	r17	;verifie if
+C:000b91 910f      	pop	r16
+C:000b92 3010      	cpi	r17,0
+C:000b93 f411      	brne	Else1
+C:000b94 3001      	cpi	r16,0x01	; sans else
+C:000b95 f031      	breq	Else2
+          Else1:
+C:000b96 930f      	push	r16
+C:000b97 931f      	push	r17
+C:000b98 932f      	push	r18
+C:000b99 933f      	push	r19
+C:000b9a 940c 088e 	jmp	restitue
+         	
+          Else2:
+C:000b9c 91df      	pop	YH	;adresse adresse de JMP de IF
+C:000b9d 91cf      	pop	YL
+C:000b9e e00c      	ldi	r16,0x0C	; JMP de Else
+C:000b9f 930d      	st	X+,r16
+C:000ba0 e904      	ldi	r16,0X94
+C:000ba1 930d      	st	X+,r16	
+C:000ba2 93af      	push	XL	; adresse JMP de else
+C:000ba3 93bf      	push	XH
+C:000ba4 930d      	st	X+,r16
+C:000ba5 930d      	st	X+,r16
+C:000ba6 9634      	adiw	ZH:ZL,4
+C:000ba7 93ef      	push	ZL
+C:000ba8 93ff      	push	ZH
+C:000ba9 95f6      	lsr	ZH
+C:000baa 95e7      	ror	ZL
+C:000bab 9724      	sbiw	YH:YL,4		; modif BRNE en BREQ  de if
+C:000bac e101      	ldi	r16,0x11
+C:000bad 9309      	st	y+,r16
+C:000bae ef00      	ldi	r16,0XF0
+C:000baf 9309      	st	y+,r16
+C:000bb0 9622      	adiw	YH:YL,2
+C:000bb1 93e9      	st	Y+,ZL	;adresse de saut apres if
+C:000bb2 93f9      	st	Y+,ZH
+C:000bb3 91ff      	pop	ZH
+C:000bb4 91ef      	pop	ZL
+C:000bb5 e002      	ldi	r16,0x2	; signal Else
+C:000bb6 930f      	push	r16
+C:000bb7 2700      	clr	r16
+C:000bb8 930f      	push	r16
+C:000bb9 932f      	push	r18
+C:000bba 933f      	push	r19
+C:000bbb 9508      	ret	
+          .DB     " begin",0x5,1<<COMPILE
+C:000BBC 20626567696E0520
+          .DW	link
+C:000bc0 0b8d
+          begin:
+          .SET link=begin
+C:000bc1 9508      	ret
+C:000bc2 913f      	pop	r19
+C:000bc3 912f      	pop	r18
+C:000bc4 e000      	ldi	r16,0x0	; and r0,r0 pour begin
+C:000bc5 930d      	st	X+,r16
+C:000bc6 e200      	ldi	r16,0X20
+C:000bc7 930d      	st	X+,r16
+C:000bc8 9632      	adiw	ZH:ZL,2
+C:000bc9 2f4e      	mov	r20,ZL
+C:000bca 2f5f      	mov	r21,ZH
+C:000bcb 9556      	lsr	r21
+C:000bcc 9547      	ror	r20
+C:000bcd 934f      	push	r20	; stocke adresse pour JMP
+C:000bce 935f      	push	r21
+C:000bcf e003      	ldi	r16,0X03 ; controle 0x0003 pour again et until
+C:000bd0 930f      	push	r16
+C:000bd1 2700      	clr	r16
+C:000bd2 930f      	push	r16
+C:000bd3 932f      	push	r18
+C:000bd4 933f      	push	r19
+C:000bd5 9508      	ret
+         	
+          .DB     " again",0x5,1<<COMPILE
+C:000BD6 20616761696E0520
+          .DW	link
+C:000bda 0bc1
+          again:
+          .SET link=again
+C:000bdb 9508      	ret
+C:000bdc 913f      	pop	r19	;adresse de retour
+C:000bdd 912f      	pop	r18
+C:000bde 911f      	pop	r17	;verifie begin
+C:000bdf 910f      	pop	r16
+C:000be0 3010      	cpi	r17,0
+C:000be1 f411      	brne	again1
+C:000be2 3003      	cpi	r16,0x03	; begin
+C:000be3 f031      	breq	again2
+          again1:
+C:000be4 930f      	push	r16
+C:000be5 931f      	push	r17
+C:000be6 932f      	push	r18
+C:000be7 933f      	push	r19
+C:000be8 940c 088e 	jmp	restitue
+         	
+          again2:
+C:000bea e00c      	ldi	r16,0x0C	; JMP pour again
+C:000beb 930d      	st	X+,r16
+C:000bec e904      	ldi	r16,0X94
+C:000bed 930d      	st	X+,r16
+C:000bee 911f      	pop	r17
+C:000bef 910f      	pop	r16
+C:000bf0 930d      	st	X+,r16
+C:000bf1 931d      	st	X+,r17
+C:000bf2 9634      	adiw	ZH:ZL,4
+C:000bf3 932f      	push	r18
+C:000bf4 933f      	push	r19
+C:000bf5 9508      	ret
+         		
+          .DB     " until",0x5,1<<COMPILE
+C:000BF6 20756E74696C0520
+          .DW	link
+C:000bfa 0bdb
+          until:
+          .SET link=until
+C:000bfb 9508      	ret
+C:000bfc 913f      	pop	r19	;adresse de retour
+C:000bfd 912f      	pop	r18
+C:000bfe 911f      	pop	r17	;verifie begin
+C:000bff 910f      	pop	r16
+C:000c00 3010      	cpi	r17,0
+C:000c01 f411      	brne	until1
+C:000c02 3003      	cpi	r16,0x03	; begin
+C:000c03 f031      	breq	until2
+          until1:
+C:000c04 930f      	push	r16
+C:000c05 931f      	push	r17
+C:000c06 932f      	push	r18
+C:000c07 933f      	push	r19
+C:000c08 940c 088e 	jmp	restitue
+         	
+          until2:
+C:000c0a e101      	ldi	r16,0x11	; brne +2 pour until
+C:000c0b 930d      	st	X+,r16
+C:000c0c ef04      	ldi	r16,0XF4
+C:000c0d 930d      	st	X+,r16
+C:000c0e e00c      	ldi	r16,0x0C	; JMP pour until
+C:000c0f 930d      	st	X+,r16
+C:000c10 e904      	ldi	r16,0X94
+C:000c11 930d      	st	X+,r16
+C:000c12 911f      	pop	r17
+C:000c13 910f      	pop	r16
+C:000c14 930d      	st	X+,r16
+C:000c15 931d      	st	X+,r17
+C:000c16 9636      	adiw	ZH:ZL,6
+C:000c17 932f      	push	r18
+C:000c18 933f      	push	r19
+C:000c19 9508      	ret
+         	
+          .DB     " while",0x5,1<<COMPILE
+C:000C1A 207768696C650520
+          .DW	link
+C:000c1e 0bfb
+          while:
+          .SET link=while
+C:000c1f 9508      	ret
+C:000c20 913f      	pop	r19	;adresse de retour
+C:000c21 912f      	pop	r18
+C:000c22 911f      	pop	r17	;verifie begin
+C:000c23 910f      	pop	r16
+C:000c24 3010      	cpi	r17,0
+C:000c25 f411      	brne	while1
+C:000c26 3003      	cpi	r16,0x03	; begin
+C:000c27 f031      	breq	while2
+          while1:
+C:000c28 930f      	push	r16
+C:000c29 931f      	push	r17
+C:000c2a 932f      	push	r18
+C:000c2b 933f      	push	r19
+C:000c2c 940c 088e 	jmp	restitue
+         	
+          while2:
+C:000c2e e101      	ldi	r16,0x11	; brne +2 de while
+C:000c2f 930d      	st	X+,r16
+C:000c30 ef04      	ldi	r16,0XF4
+C:000c31 930d      	st	X+,r16
+C:000c32 e00c      	ldi	r16,0x0C	; JMP pour repeat
+C:000c33 930d      	st	X+,r16
+C:000c34 e904      	ldi	r16,0X94
+C:000c35 930d      	st	X+,r16
+C:000c36 2f4a      	mov	r20,XL
+C:000c37 2f5b      	mov	r21,XH
+C:000c38 930d      	st	X+,r16
+C:000c39 930d      	st	X+,r16
+C:000c3a 934f      	push	r20	; stocke adresse pour JMP
+C:000c3b 935f      	push	r21
+C:000c3c 9636      	adiw	ZH:ZL,6
+C:000c3d e004      	ldi	r16,0X04 ; controle 0x0004 pour while
+C:000c3e 930f      	push	r16
+C:000c3f 2700      	clr	r16
+C:000c40 930f      	push	r16
+C:000c41 932f      	push	r18
+C:000c42 933f      	push	r19
+C:000c43 9508      	ret
+          .DB     "repeat",0x6,1<<COMPILE
+C:000C44 7265706561740620
+          .DW	link
+C:000c48 0c1f
+          Repeat:
+          .SET link=Repeat
+C:000c49 9508      	ret
+C:000c4a 913f      	pop	r19	;adresse de retour
+C:000c4b 912f      	pop	r18
+C:000c4c 911f      	pop	r17	;verifie while
+C:000c4d 910f      	pop	r16
+C:000c4e 3010      	cpi	r17,0
+C:000c4f f411      	brne	Repeat1
+C:000c50 3004      	cpi	r16,0x04	; while
+C:000c51 f031      	breq	Repeat2
+          Repeat1:
+C:000c52 930f      	push	r16
+C:000c53 931f      	push	r17
+C:000c54 932f      	push	r18
+C:000c55 933f      	push	r19
+C:000c56 940c 088e 	jmp	restitue
+         	
+          Repeat2:
+C:000c58 91df      	pop	YH
+C:000c59 91cf      	pop	YL
+C:000c5a e00c      	ldi	r16,0x0C	; JMP pour repeat
+C:000c5b 930d      	st	X+,r16
+C:000c5c e904      	ldi	r16,0X94
+C:000c5d 930d      	st	X+,r16
+C:000c5e 911f      	pop	r17
+C:000c5f 910f      	pop	r16
+C:000c60 930d      	st	X+,r16
+C:000c61 931d      	st	X+,r17
+C:000c62 9634      	adiw	ZH:ZL,4
+C:000c63 2f4e      	mov	r20,ZL
+C:000c64 2f5f      	mov	r21,ZH
+C:000c65 9556      	lsr	r21
+C:000c66 9547      	ror	r20
+C:000c67 9349      	st	Y+,r20
+C:000c68 9359      	st	Y+,r21
+C:000c69 932f      	push	r18
+C:000c6a 933f      	push	r19
+C:000c6b 9508      	ret
+         	
+          .DB     " leave",0x5,1<<EXEC
+C:000C6C 206C656176650508
+          .DW	link
+C:000c70 0c49
+          leave:
+          .SET link=leave
+C:000c71 905f      	pop	r5	;adresse de retour
+C:000c72 904f      	pop	r4
+C:000c73 903f      	pop	r3	;index I
+C:000c74 902f      	pop	r2
+C:000c75 901f      	pop	r1	;limit de I
+C:000c76 900f      	pop	r0
+C:000c77 920f      	push	r0	;limit de I
+C:000c78 921f      	push	r1
+C:000c79 920f      	push	r0	;index I
+C:000c7a 921f      	push	r1
+C:000c7b 924f      	push	r4
+C:000c7c 925f      	push	r5
+C:000c7d 9508      	ret
+          .DB     " I",0x1,1<<EXEC
+C:000C7E 20490108
+          .DW	link
+C:000c80 0c71
+          _I:
+          .SET link=_I	
+C:000c81 905f      	pop	r5	;adresse de retour
+C:000c82 904f      	pop	r4
+C:000c83 903f      	pop	r3	;index I
+C:000c84 902f      	pop	r2
+C:000c85 922f      	push	r2	
+C:000c86 923f      	push	r3
+C:000c87 924f      	push	r4
+C:000c88 925f      	push	r5
+C:000c89 922d      	st	X+,r2
+C:000c8a 923d      	st	X+,r3
+C:000c8b 9508      	ret
+         
+          .DB     " J",0x1,1<<EXEC
+C:000C8C 204A0108
+          .DW	link
+C:000c8e 0c81
+          _J:
+          .SET link=_J
+C:000c8f 909f      	pop	r9	;adresse de retour
+C:000c90 908f      	pop	r8
+C:000c91 907f      	pop	r7	;index I
+C:000c92 906f      	pop	r6
+C:000c93 905f      	pop	r5	;limit de I
+C:000c94 904f      	pop	r4
+C:000c95 903f      	pop	r3	;adresse de retour boucle DO
+C:000c96 902f      	pop	r2
+C:000c97 901f      	pop	r1	;index J
+C:000c98 900f      	pop	r0
+C:000c99 920f      	push	r0	;index J
+C:000c9a 921f      	push	r1
+C:000c9b 922f      	push	r2	;adresse de retour boucle DO
+C:000c9c 923f      	push	r3
+C:000c9d 924f      	push	r4	;limit de I
+C:000c9e 925f      	push	r5
+C:000c9f 926f      	push	r6	;index I
+C:000ca0 927f      	push	r7
+C:000ca1 928f      	push	r8	;adresse de retour
+C:000ca2 929f      	push	r9
+C:000ca3 920d      	st	X+,r0
+C:000ca4 921d      	st	X+,r1
+C:000ca5 9508      	ret
+         
+          .DB     ">r",0x2,1<<EXEC
+C:000CA6 3E720208
+          .DW	link
+C:000ca8 0c8f
+          in_r:
+          .SET link=in_r
+C:000ca9 901f      	pop	r1
+C:000caa 900f      	pop	r0
+C:000cab 911e      	ld	r17,-X
+C:000cac 910e      	ld	r16,-X
+C:000cad 930f      	push	r16
+C:000cae 931f      	push	r17
+C:000caf 920f      	push	r0
+C:000cb0 921f      	push	r1
+C:000cb1 9508      	ret
+          .DB     "<r",0x2,1<<EXEC
+C:000CB2 3C720208
+          .DW	link
+C:000cb4 0ca9
+          out_r:
+          .SET link=out_r
+C:000cb5 903f      	pop	r3
+C:000cb6 902f      	pop	r2
+C:000cb7 901f      	pop	r1
+C:000cb8 900f      	pop	r0
+C:000cb9 920d      	st	X+,r0
+C:000cba 921d      	st	X+,r1
+C:000cbb 922f      	push	r2
+C:000cbc 923f      	push	r3
+C:000cbd 9508      	ret
+          .DB     "r!",0x2,1<<EXEC
+C:000CBE 72210208
+          .DW	link
+C:000cc0 0cb5
+          read_r:
+          .SET link=read_r
+C:000cc1 901f      	pop	r1
+C:000cc2 900f      	pop	r0
+C:000cc3 903f      	pop	r3
+C:000cc4 902f      	pop	r2
+C:000cc5 911e      	ld	r17,-X
+C:000cc6 910e      	ld	r16,-X
+C:000cc7 930d      	st	X+,r16
+C:000cc8 931d      	st	X+,r17
+C:000cc9 930f      	push	r16
+C:000cca 931f      	push	r17
+C:000ccb 920f      	push	r0
+C:000ccc 921f      	push	r1
+C:000ccd 9508      	ret
+          .DB     "r@",0x2,1<<EXEC
+C:000CCE 72400208
+          .DW	link
+C:000cd0 0cc1
+          write_r:
+          .SET link=write_r
+C:000cd1 903f      	pop	r3
+C:000cd2 902f      	pop	r2
+C:000cd3 901f      	pop	r1
+C:000cd4 900f      	pop	r0
+C:000cd5 920d      	st	X+,r0
+C:000cd6 921d      	st	X+,r1
+C:000cd7 922f      	push	r2
+C:000cd8 923f      	push	r3
+C:000cd9 921f      	push	r1
+C:000cda 920f      	push	r0
+C:000cdb 9508      	ret
+          .DB     "c?",0x2,1<<EXEC
+C:000CDC 633F0208
+          .DW	link
+C:000cde 0cd1
+          Cq:
+          .SET link=Cq
+C:000cdf 910e      	ld	r16,-X
+C:000ce0 930d      	st	X+,r16
+C:000ce1 2b00      	or	r16,r16
+C:000ce2 9508      	ret
+         	
+          .DB     " ?",0x1,1<<EXEC
+C:000CE3 203F0108
+          .DW	link
+C:000ce5 0cdf
+          Q:
+          .SET link=Q
+C:000ce6 911e      	ld	r17,-X
+C:000ce7 910e      	ld	r16,-X
+C:000ce8 930d      	st	X+,r16
+C:000ce9 931d      	st	X+,r17
+C:000cea 2b01      	or	r16,r17
+C:000ceb 9508      	ret
+         
+         	
+          .DB     "/?",0x2,1<<EXEC
+C:000CEC 2F3F0208
+          .DW	link
+C:000cee 0ce6
+          No:
+          .SET link=No
+C:000cef 911e      	ld	r17,-X
+C:000cf0 910e      	ld	r16,-X
+C:000cf1 930d      	st	X+,r16
+C:000cf2 931d      	st	X+,r17
+C:000cf3 2b01      	or	r16,r17
+C:000cf4 f411      	brne    No1   
+C:000cf5 9498      	clz
+C:000cf6 9508      	ret
+          No1:
+C:000cf7 9418      	sez
+C:000cf8 9508      	ret
+         
+          .DB     " =",0x1,1<<EXEC
+C:000CF9 203D0108
+          .DW	link
+C:000cfb 0cef
+          _eq:
+          .SET link=_eq
+C:000cfc 905e      	ld	r5,-X
+C:000cfd 904e      	ld	r4,-X
+C:000cfe 903e      	ld	r3,-X
+C:000cff 902e      	ld	r2,-X
+C:000d00 2424      	eor	r2,r4
+C:000d01 2435      	eor	r3,r5
+C:000d02 2823      	or	r2,r3
+C:000d03 f011      	breq	_eq1
+C:000d04 9418      	sez
+C:000d05 9508      	ret
+          _eq1:	
+C:000d06 9498      	clz
+C:000d07 9508      	ret
+         	
+          .DB     "0=",0x2,1<<EXEC
+C:000D08 303D0208
+          .DW	link
+C:000d0a 0cfc
+          Zeq:
+          .SET link=Zeq
+C:000d0b 911e      	ld	r17,-X
+C:000d0c 910e      	ld	r16,-X
+C:000d0d 2b01      	or	r16,r17
+C:000d0e f011      	breq	zeq1
+C:000d0f 9418      	sez
+C:000d10 9508      	ret
+          Zeq1:	
+C:000d11 9498      	clz
+C:000d12 9508      	ret
+         
+          .DB     "<>",0x2,1<<EXEC
+C:000D13 3C3E0208
+          .DW	link
+C:000d15 0d0b
+          diff:
+          .SET link=diff
+C:000d16 903e      	ld	r3,-X
+C:000d17 902e      	ld	r2,-X
+C:000d18 905e      	ld	r5,-X
+C:000d19 904e      	ld	r4,-X
+C:000d1a 1424      	cp	r2,r4
+C:000d1b f421      	brne	diff1
+C:000d1c 1435      	cp	r3,r5
+C:000d1d f411      	brne	diff1
+C:000d1e 9418      	sez
+C:000d1f 9508      	ret
+          diff1:	
+C:000d20 9498      	clz
+C:000d21 9508      	ret
+          .DB     " 0<>",0x3,1<<EXEC
+C:000D22 20303C3E0308
+          .DW	link
+C:000d25 0d16
+          zdiff:
+          .SET link=zdiff
+C:000d26 903e      	ld	r3,-X
+C:000d27 902e      	ld	r2,-X
+C:000d28 2823      	or	r2,r3
+C:000d29 9508      	ret
+          .DB     " <",0x1,1<<EXEC
+C:000D2A 203C0108
+          .DW	link
+C:000d2c 0d26
+          inf:
+          .SET link=inf
+C:000d2d 905e      	ld	r5,-X
+C:000d2e 904e      	ld	r4,-X
+C:000d2f 903e      	ld	r3,-X
+C:000d30 902e      	ld	r2,-X
+C:000d31 1435      	cp	r3,r5
+C:000d32 f028      	brcs	inf2
+C:000d33 f411      	brne	inf1
+C:000d34 1424      	cp	r2,r4
+C:000d35 f010      	brcs	inf2	
+          inf1:		
+C:000d36 9418      	sez
+C:000d37 9508      	ret
+          inf2:	
+C:000d38 9498      	clz
+C:000d39 9508      	ret
+          .DB     " >",0x1,1<<EXEC
+C:000D3A 203E0108
+          .DW	link
+C:000d3c 0d2d
+          sup:
+          .SET link=sup
+C:000d3d 905e      	ld	r5,-X
+C:000d3e 904e      	ld	r4,-X
+C:000d3f 903e      	ld	r3,-X
+C:000d40 902e      	ld	r2,-X
+C:000d41 1453      	cp	r5,r3
+C:000d42 f028      	brcs	sup2
+C:000d43 f411      	brne	sup1
+C:000d44 1442      	cp	r4,r2
+C:000d45 f010      	brcs	sup2	
+          sup1:		
+C:000d46 9418      	sez
+C:000d47 9508      	ret
+          sup2:		
+C:000d48 9498      	clz
+C:000d49 9508      	ret
+          .DB     "<=",0x2,1<<EXEC
+C:000D4A 3C3D0208
+          .DW	link
+C:000d4c 0d3d
+          eqinf:
+          .SET link=eqinf
+C:000d4d 905e      	ld	r5,-X
+C:000d4e 904e      	ld	r4,-X
+C:000d4f 903e      	ld	r3,-X
+C:000d50 902e      	ld	r2,-X
+C:000d51 1453      	cp	r5,r3
+C:000d52 f028      	brcs	eqinf2
+C:000d53 f411      	brne	eqinf1
+C:000d54 1442      	cp	r4,r2
+C:000d55 f010      	brcs	eqinf2	
+          eqinf1:		
+C:000d56 9498      	clz
+C:000d57 9508      	ret
+          eqinf2:	
+C:000d58 9418      	sez
+C:000d59 9508      	ret
+          .DB     ">=",0x2,1<<EXEC
+C:000D5A 3E3D0208
+          .DW	link
+C:000d5c 0d4d
+          eqsup:
+          .SET link=eqsup
+C:000d5d 905e      	ld	r5,-X
+C:000d5e 904e      	ld	r4,-X
+C:000d5f 903e      	ld	r3,-X
+C:000d60 902e      	ld	r2,-X
+C:000d61 1435      	cp	r3,r5
+C:000d62 f028      	brcs	eqsup2
+C:000d63 f411      	brne	eqsup1
+C:000d64 1424      	cp	r2,r4
+C:000d65 f010      	brcs	eqsup2	
+          eqsup1:		
+C:000d66 9498      	clz
+C:000d67 9508      	ret
+          eqsup2:		
+C:000d68 9418      	sez
+C:000d69 9508      	ret
+          .DB     " +",0x1,1<<EXEC
+C:000D6A 202B0108
+          .DW	link
+C:000d6c 0d5d
+          plus:
+          .SET link=plus
+C:000d6d 903e      	ld	r3,-X
+C:000d6e 902e      	ld	r2,-X
+C:000d6f 905e      	ld	r5,-X
+C:000d70 904e      	ld	r4,-X
+C:000d71 0c24      	add	r2,r4
+C:000d72 1c35      	adc	r3,r5
+C:000d73 922d      	st	X+,r2
+C:000d74 923d      	st	X+,r3
+C:000d75 9508      	ret
+         	
+          .DB     " -",0x1,1<<EXEC
+C:000D76 202D0108
+          .DW	link
+C:000d78 0d6d
+          moins:
+          .SET link=moins
+C:000d79 905e      	ld	r5,-X
+C:000d7a 904e      	ld	r4,-X
+C:000d7b 903e      	ld	r3,-X
+C:000d7c 902e      	ld	r2,-X
+C:000d7d 1824      	sub	r2,r4
+C:000d7e 0835      	sbc	r3,r5
+C:000d7f 922d      	st	X+,r2
+C:000d80 923d      	st	X+,r3
+C:000d81 9508      	ret
+          .DB     "*D",0x2,1<<EXEC
+C:000D82 2A440208
+          .DW	link
+C:000d84 0d79
+          multD:
+          .SET link=multD
+C:000d85 905e      	ld	r5,-X
+C:000d86 904e      	ld	r4,-X
+C:000d87 903e      	ld	r3,-X
+C:000d88 902e      	ld	r2,-X
+C:000d89 2477      	clr	r7
+C:000d8a 2488      	clr	r8
+C:000d8b 9c24      	mul	r2,r4
+C:000d8c 920d      	st	x+,r0
+C:000d8d 2c61      	mov	r6,r1
+C:000d8e 9c34      	mul	r3,r4
+C:000d8f 0c60      	add	r6,r0
+C:000d90 1c71      	adc	r7,r1
+C:000d91 9c25      	mul	r2,r5
+C:000d92 0c60      	add	r6,r0
+C:000d93 1c71      	adc	r7,r1
+C:000d94 f408      	brcc	multD1
+C:000d95 9483      	inc	r8
+          multD1:
+C:000d96 9c35      	mul	r3,r5
+C:000d97 0c70      	add	r7,r0
+C:000d98 1c81      	adc	r8,r1
+C:000d99 926d      	st	x+,r6
+C:000d9a 927d      	st	x+,r7
+C:000d9b 928d      	st	x+,r8
+C:000d9c 9508      	ret
+         	
+          .DB     " *",0x1,1<<EXEC
+C:000D9D 202A0108
+          .DW	link
+C:000d9f 0d85
+          mult:
+          .SET link=mult
+C:000da0 905e      	ld	r5,-X
+C:000da1 904e      	ld	r4,-X
+C:000da2 903e      	ld	r3,-X
+C:000da3 902e      	ld	r2,-X
+C:000da4 9c24      	mul	r2,r4
+C:000da5 920d      	st	x+,r0
+C:000da6 2c61      	mov	r6,r1
+C:000da7 9c34      	mul	r3,r4
+C:000da8 0c60      	add	r6,r0
+C:000da9 9c25      	mul	r2,r5
+C:000daa 0c60      	add	r6,r0
+C:000dab 926d      	st	x+,r6
+C:000dac 9508      	ret
+         	
+          .DB     "/mod",0x4,1<<EXEC
+C:000DAD 2F6D6F640408
+          .DW	link
+C:000db0 0da0
+          divmod:
+          .SET link=divmod
+C:000db1 e100      	ldi	r16,0x10
+C:000db2 903e      	ld	r3,-X
+C:000db3 902e      	ld	r2,-X
+C:000db4 901e      	ld	r1,-X
+C:000db5 900e      	ld	r0,-X
+          divmod0:
+C:000db6 2455      	clr	r5
+C:000db7 2466      	clr	r6
+C:000db8 2477      	clr	r7
+C:000db9 2488      	clr	r8
+          divmod1:
+C:000dba 0c00      	lsl	r0
+C:000dbb 1c11      	rol	r1
+C:000dbc 1c55      	rol	r5
+C:000dbd 1c66      	rol	r6
+C:000dbe 1463      	cp	r6,r3
+C:000dbf f030      	brcs	divmod3 ; inferieur
+C:000dc0 f411      	brne	divmod2	;superieur
+C:000dc1 1452      	cp	r5,r2
+C:000dc2 f018      	brcs	divmod3 ; inferieur
+          divmod2:
+C:000dc3 1852      	sub	r5,r2
+C:000dc4 0863      	sbc	r6,r3
+C:000dc5 9473      	inc	r7
+          divmod3:
+C:000dc6 950a      	dec	r16
+C:000dc7 f019      	breq	divmod4
+C:000dc8 0c77      	lsl	r7
+C:000dc9 1c88      	rol	r8
+C:000dca cfef      	rjmp	divmod1
+          divmod4:
+C:000dcb 927d      	st	X+,r7
+C:000dcc 928d      	st	X+,r8
+C:000dcd 925d      	st	X+,r5
+C:000dce 926d      	st	X+,r6
+C:000dcf 9508      	ret
+          .DB     " /",0x1,1<<EXEC
+C:000DD0 202F0108
+          .DW	link
+C:000dd2 0db1
+          div:
+          .SET link=div
+C:000dd3 940e 0db1 	call	divmod
+C:000dd5 9712      	sbiw	XH:XL,2
+C:000dd6 9508      	ret
+         	
+          .DB     " mod",0x3,1<<EXEC
+C:000DD7 206D6F640308
+          .DW	link
+C:000dda 0dd3
+          mod:
+          .SET link=mod
+C:000ddb 940e 0db1 	call	divmod
+C:000ddd 903e      	ld	r3,-X
+C:000dde 902e      	ld	r2,-X
+C:000ddf 901e      	ld	r1,-X
+C:000de0 900e      	ld	r0,-X
+C:000de1 922d      	st	X+,r2
+C:000de2 923d      	st	X+,r3
+C:000de3 9508      	ret
+         
+          .DB     "or",0x2,1<<EXEC
+C:000DE4 6F720208
+          .DW	link
+C:000de6 0ddb
+          _or:
+          .SET link=_or
+C:000de7 905e      	ld	r5,-X
+C:000de8 904e      	ld	r4,-X
+C:000de9 903e      	ld	r3,-X
+C:000dea 902e      	ld	r2,-X
+C:000deb 2824      	or	r2,r4
+C:000dec 2835      	or	r3,r5
+C:000ded 922d      	st	X+,r2
+C:000dee 923d      	st	X+,r3
+C:000def 9508      	ret
+          .DB     " and",0x3,1<<EXEC
+C:000DF0 20616E640308
+          .DW	link
+C:000df3 0de7
+          _and:
+          .SET link=_and
+C:000df4 905e      	ld	r5,-X
+C:000df5 904e      	ld	r4,-X
+C:000df6 903e      	ld	r3,-X
+C:000df7 902e      	ld	r2,-X
+C:000df8 2024      	and	r2,r4
+C:000df9 2035      	and	r3,r5
+C:000dfa 922d      	st	X+,r2
+C:000dfb 923d      	st	X+,r3
+C:000dfc 9508      	ret
+         	
+          .DB     " xor",0x3,1<<EXEC
+C:000DFD 20786F720308
+          .DW	link
+C:000e00 0df4
+          _xor:
+          .SET link=_xor
+C:000e01 905e      	ld	r5,-X
+C:000e02 904e      	ld	r4,-X
+C:000e03 903e      	ld	r3,-X
+C:000e04 902e      	ld	r2,-X
+C:000e05 2424      	eor	r2,r4
+C:000e06 2435      	eor	r3,r5
+C:000e07 922d      	st	X+,r2
+C:000e08 923d      	st	X+,r3
+C:000e09 9508      	ret
+         	
+          .DB     " not",0x3,1<<EXEC
+C:000E0A 206E6F740308
+          .DW	link
+C:000e0d 0e01
+          _not:
+          .SET link=_not
+C:000e0e 903e      	ld	r3,-X
+C:000e0f 902e      	ld	r2,-X
+C:000e10 9420      	com	r2
+C:000e11 9430      	com	r3
+C:000e12 922d      	st	X+,r2
+C:000e13 923d      	st	X+,r3
+C:000e14 9508      	ret
+          .DB     "<<",0x2,1<<EXEC
+C:000E15 3C3C0208
+          .DW	link
+C:000e17 0e0e
+          Lshift:
+          .SET link=Lshift
+C:000e18 9488      	clc
+C:000e19 904e      	ld	r4,-X
+C:000e1a 904e      	ld	r4,-X
+C:000e1b 2844      	or     r4,r4
+C:000e1c f409      	brne    Lshift01
+C:000e1d 9508      	ret
+          Lshift01:
+C:000e1e 903e      	ld	r3,-X
+C:000e1f 902e      	ld	r2,-X
+          Lshift1:
+C:000e20 0c22      	lsl	r2
+C:000e21 1c33      	rol	r3
+C:000e22 944a      	dec	r4
+C:000e23 f7e1      	brne	Lshift1
+C:000e24 922d      	st	X+,r2
+C:000e25 923d      	st	X+,r3
+C:000e26 9508      	ret
+          .DB     ">>",0x2,1<<EXEC
+C:000E27 3E3E0208
+          .DW	link
+C:000e29 0e18
+          Rshift:
+          .SET link=Rshift
+C:000e2a 9488      	clc
+C:000e2b 904e      	ld	r4,-X
+C:000e2c 904e      	ld	r4,-X
+C:000e2d 2844      	or     r4,r4
+C:000e2e f409      	brne   Rshift01
+C:000e2f 9508      	ret
+          Rshift01:
+C:000e30 903e      	ld	r3,-X
+C:000e31 902e      	ld	r2,-X
+          Rshift1:
+C:000e32 9436      	lsr	r3
+C:000e33 9427      	ror	r2
+C:000e34 944a      	dec	r4
+C:000e35 f7e1      	brne	Rshift1
+C:000e36 922d      	st	X+,r2
+C:000e37 923d      	st	X+,r3
+C:000e38 9508      	ret
+          .DB     " <<c",0x3,1<<EXEC
+C:000E39 203C3C630308
+          .DW	link
+C:000e3c 0e2a
+          Clshift:
+          .SET link=Clshift
+C:000e3d 904e      	ld	r4,-X
+C:000e3e 904e      	ld	r4,-X
+C:000e3f 2844      	or     r4,r4
+C:000e40 f409      	brne   Clshift01
+C:000e41 9508      	ret
+          Clshift01:
+C:000e42 903e      	ld	r3,-X
+C:000e43 902e      	ld	r2,-X
+          Clshift1:
+C:000e44 1c22      	rol	r2
+C:000e45 1c33      	rol	r3
+C:000e46 944a      	dec	r4
+C:000e47 f7e1      	brne	Clshift1
+C:000e48 922d      	st	X+,r2
+C:000e49 923d      	st	X+,r3
+C:000e4a 9508      	ret
+          .DB     " c>>",0x3,1<<EXEC
+C:000E4B 20633E3E0308
+          .DW	link
+C:000e4e 0e3d
+          Crshift:
+          .SET link=Crshift
+C:000e4f 904e      	ld	r4,-X
+C:000e50 904e      	ld	r4,-X
+C:000e51 2844      	or     r4,r4
+C:000e52 f409      	brne   Crshift01
+C:000e53 9508      	ret
+          Crshift01:
+C:000e54 903e      	ld	r3,-X
+C:000e55 902e      	ld	r2,-X
+          Crshift1:
+C:000e56 9437      	ror	r3
+C:000e57 9427      	ror	r2
+C:000e58 944a      	dec	r4
+C:000e59 f7e1      	brne	Crshift1
+C:000e5a 922d      	st	X+,r2
+C:000e5b 923d      	st	X+,r3
+C:000e5c 9508      	ret
+          .DB     " carry",0x5,1<<EXEC
+C:000E5D 2063617272790508
+          .DW	link
+C:000e61 0e4f
+          _carry:
+          .SET link=_carry
+C:000e62 9498      	clz
+C:000e63 f008      	brcs	_carry1
+C:000e64 9418      	sez
+          _carry1:	
+C:000e65 9508      	ret
+          .DB     "setc",0x4,1<<EXEC
+C:000E66 736574630408
+          .DW	link
+C:000e69 0e62
+          setc:
+          .SET link=setc
+C:000e6a 9408      	sec
+C:000e6b 9508      	ret
+          .DB     "clrc",0x4,1<<EXEC
+C:000E6C 636C72630408
+          .DW	link
+C:000e6f 0e6a
+          clrc:
+          .SET link=clrc
+C:000e70 9488      	clc
+C:000e71 9508      	ret
+          .DB     "setz",0x4,1<<EXEC
+C:000E72 7365747A0408
+          .DW	link
+C:000e75 0e70
+          setz:
+          .SET link=setz
+C:000e76 9418      	sez
+C:000e77 9508      	ret
+          .DB     "clrz",0x4,1<<EXEC
+C:000E78 636C727A0408
+          .DW	link
+C:000e7b 0e76
+          clrz:
+          .SET link=clrz
+C:000e7c 9498      	clz
+C:000e7d 9508      	ret
+          .DB     "togz",0x4,1<<EXEC
+C:000E7E 746F677A0408
+          .DW	link
+C:000e81 0e7c
+          togz:
+          .SET link=togz
+C:000e82 f411      	brne	togz1
+C:000e83 9498      	clz
+C:000e84 9508      	ret
+          togz1:
+C:000e85 9418      	sez
+C:000e86 9508      	ret
+          .DB     "togc",0x4,1<<EXEC
+C:000E87 746F67630408
+          .DW	link
+C:000e8a 0e82
+          togc:
+          .SET link=togc
+C:000e8b f410      	brcc	togc1
+C:000e8c 9488      	clc
+C:000e8d 9508      	ret
+          togc1:
+C:000e8e 9408      	sec
+C:000e8f 9508      	ret
+          .DB     " tbits",0x5,1<<EXEC
+C:000E90 2074626974730508
+          .DW	link
+C:000e94 0e8b
+          tbits:
+          .SET link=tbits
+C:000e95 910e      	ld	r16,-X
+C:000e96 910e      	ld	r16,-X
+C:000e97 913e      	ld	r19,-X
+C:000e98 912e      	ld	r18,-X
+C:000e99 932d      	st	X+,r18
+C:000e9a 933d      	st	X+,r19
+C:000e9b e011      	ldi	r17,0x01
+C:000e9c 700f      	andi	r16,0x0F
+C:000e9d 3008      	cpi	r16,0x08
+C:000e9e f010      	brcs	tbits1
+C:000e9f 2f23      	mov	r18,r19
+C:000ea0 7007      	andi	r16,0x07
+          tbits1:
+C:000ea1 2b00      	or	r16,r16
+C:000ea2 f019      	breq	tbits3
+          tbits2:
+C:000ea3 0f11      	lsl	r17
+C:000ea4 950a      	dec	r16
+C:000ea5 f7e9      	brne	tbits2
+          tbits3:
+C:000ea6 2321      	and	r18,r17
+C:000ea7 9508      	ret
+          .DB     " sbits",0x5,1<<EXEC
+C:000EA8 2073626974730508
+          .DW	link
+C:000eac 0e95
+          sbits:
+          .SET link=sbits
+C:000ead 910e      	ld	r16,-X
+C:000eae 910e      	ld	r16,-X
+C:000eaf e011      	ldi	r17,0x01
+C:000eb0 700f      	andi	r16,0x0F
+C:000eb1 3008      	cpi	r16,0x08
+C:000eb2 f440      	brcc	sbits1
+C:000eb3 913e      	ld	r19,-X
+C:000eb4 912e      	ld	r18,-X
+C:000eb5 940e 0ec2 	call	sbits2
+C:000eb7 2b21      	or	r18,r17
+C:000eb8 932d      	st	X+,r18
+C:000eb9 933d      	st	X+,r19
+C:000eba 9508      	ret
+          sbits1:
+C:000ebb 912e      	ld	r18,-X
+C:000ebc 7007      	andi	r16,0x07
+C:000ebd 940e 0ec2 	call	sbits2
+C:000ebf 2b21      	or	r18,r17
+C:000ec0 932d      	st	X+,r18
+C:000ec1 9508      	ret
+          sbits2:
+C:000ec2 2b00      	or	r16,r16
+C:000ec3 f019      	breq	sbits4
+          sbits3:
+C:000ec4 0f11      	lsl	r17
+C:000ec5 950a      	dec	r16
+C:000ec6 f7e9      	brne	sbits3
+          sbits4:
+C:000ec7 9508      	ret
+          .DB     " cbits",0x5,1<<EXEC
+C:000EC8 2063626974730508
+          .DW	link
+C:000ecc 0ead
+          cbits:
+          .SET link=cbits
+C:000ecd 910e      	ld	r16,-X
+C:000ece 910e      	ld	r16,-X
+C:000ecf e011      	ldi	r17,0x01
+C:000ed0 700f      	andi	r16,0x0F
+C:000ed1 3008      	cpi	r16,0x08
+C:000ed2 f440      	brcc	cbits1
+C:000ed3 913e      	ld	r19,-X
+C:000ed4 912e      	ld	r18,-X
+C:000ed5 940e 0ee2 	call	cbits2
+C:000ed7 2321      	and	r18,r17
+C:000ed8 932d      	st	X+,r18
+C:000ed9 933d      	st	X+,r19
+C:000eda 9508      	ret
+          cbits1:
+C:000edb 912e      	ld	r18,-X
+C:000edc 7007      	andi	r16,0x07
+C:000edd 940e 0ee2 	call	cbits2
+C:000edf 2321      	and	r18,r17
+C:000ee0 932d      	st	X+,r18
+C:000ee1 9508      	ret
+          cbits2:
+C:000ee2 2b00      	or	r16,r16
+C:000ee3 f019      	breq	cbits4
+          cbits3:
+C:000ee4 0f11      	lsl	r17
+C:000ee5 950a      	dec	r16
+C:000ee6 f7e9      	brne	cbits3
+          cbits4:
+C:000ee7 9510      	com	r17
+C:000ee8 9508      	ret
+          .DB     "in_d",0x4,1<<EXEC
+C:000EE9 696E5F640408
+          .DW	link
+C:000eec 0ecd
+          in_d1:
+          .SET link=in_d1
+C:000eed b109      	in	r16,pind
+C:000eee 930d      	st	X+,r16
+C:000eef 2700      	clr	r16
+C:000ef0 930d      	st	X+,r16
+C:000ef1 9508      	ret
+          .DB     " clrd6",0x5,1<<EXEC
+C:000EF2 20636C7264360508
+          .DW	link
+C:000ef6 0eed
+          clrd6:
+          .SET link=clrd6
+C:000ef7 985e      	cbi	portd,6
+C:000ef8 9508      	ret
+          .DB     " clrd7",0x5,1<<EXEC
+C:000EF9 20636C7264370508
+          .DW	link
+C:000efd 0ef7
+          clrd7:
+          .SET link=clrd7
+C:000efe 985f      	cbi	portd,7
+C:000eff 9508      	ret
+          .DB     " setd6",0x5,1<<EXEC
+C:000F00 2073657464360508
+          .DW	link
+C:000f04 0efe
+          setd6:
+          .SET link=setd6
+C:000f05 9a5e      	sbi	portd,6
+C:000f06 9508      	ret
+          .DB     " setd7",0x5,1<<EXEC
+C:000F07 2073657464370508
+          .DW	link
+C:000f0b 0f05
+          setd7:
+          .SET link=setd7
+C:000f0c 9a5f      	sbi	portd,7
+C:000f0d 9508      	ret
+          .DB     "1+",0x2,1<<EXEC
+C:000F0E 312B0208
+          .DW	link
+C:000f10 0f0c
+          plus1:
+          .SET link=plus1
+C:000f11 919e      	ld	r25,-X
+C:000f12 918e      	ld	r24,-X
+C:000f13 9601      	adiw	r25:r24,1
+C:000f14 938d      	st	X+,r24
+C:000f15 939d      	st	X+,r25
+C:000f16 9508      	ret
+          .DB     "1-",0x2,1<<EXEC
+C:000F17 312D0208
+          .DW	link
+C:000f19 0f11
+          moins1:
+          .SET link=moins1
+C:000f1a 919e      	ld	r25,-X
+C:000f1b 918e      	ld	r24,-X
+C:000f1c 9701      	sbiw	r25:r24,1
+C:000f1d 938d      	st	X+,r24
+C:000f1e 939d      	st	X+,r25
+C:000f1f 9508      	ret
+          .DB     "2+",0x2,1<<EXEC
+C:000F20 322B0208
+          .DW	link
+C:000f22 0f1a
+          plus2:
+          .SET link=plus2
+C:000f23 919e      	ld	r25,-X
+C:000f24 918e      	ld	r24,-X
+C:000f25 9602      	adiw	r25:r24,2
+C:000f26 938d      	st	X+,r24
+C:000f27 939d      	st	X+,r25
+C:000f28 9508      	ret
+          .DB     "2-",0x2,1<<EXEC
+C:000F29 322D0208
+          .DW	link
+C:000f2b 0f23
+          moins2:
+          .SET link=moins2
+C:000f2c 919e      	ld	r25,-X
+C:000f2d 918e      	ld	r24,-X
+C:000f2e 9702      	sbiw	r25:r24,2
+C:000f2f 938d      	st	X+,r24
+C:000f30 939d      	st	X+,r25
+C:000f31 9508      	ret
+          .DB     " flash",0x5,1<<EXEC
+C:000F32 20666C6173680508
+          .DW	link
+C:000f36 0f2c
+          flash:
+          .SET link=flash
+C:000f37   +  	ENV0_R16	0x46
+C:000f37 e406      ldi	r16,low(0x46) 
+C:000f38 940e 0135 call	Com0_1
+C:000f3a   +  	ENV0_R16	0x4C
+C:000f3a e40c      ldi	r16,low(0x4C) 
+C:000f3b 940e 0135 call	Com0_1
+C:000f3d   +  	ENV0_R16	0x41
+C:000f3d e401      ldi	r16,low(0x41) 
+C:000f3e 940e 0135 call	Com0_1
+C:000f40   +  	ENV0_R16	0x53
+C:000f40 e503      ldi	r16,low(0x53) 
+C:000f41 940e 0135 call	Com0_1
+C:000f43   +  	ENV0_R16	0x48
+C:000f43 e408      ldi	r16,low(0x48) 
+C:000f44 940e 0135 call	Com0_1
+C:000f46   +  	ENV0_R16	0x20
+C:000f46 e200      ldi	r16,low(0x20) 
+C:000f47 940e 0135 call	Com0_1
+C:000f49   +  	PUSHZ
+C:000f49 93e0 0111 sts	save_z,ZL
+C:000f4b 93f0 0112 sts	save_z+1,ZH
+C:000f4d 91e0 0102 	lds	ZL,(dict) ;calcul de l'adresse pour readflash
+C:000f4f 91f0 0103 	lds	ZH,(dict+1)
+C:000f51 7fe8      	andi	ZL,0xF8
+C:000f52 97f8      	sbiw	ZH:ZL,0x38
+C:000f53 97f8      	sbiw	ZH:ZL,0x38
+C:000f54 9738      	sbiw	ZH:ZL,0x08
+C:000f55 0fee      	lsl	ZL
+C:000f56 1fff      	rol	ZH	
+C:000f57 93ed      	st	X+,ZL
+C:000f58 93fd      	st	X+,ZH
+C:000f59 2700      	clr    r16
+C:000f5a 930d      	st	X+,r16
+C:000f5b   +  	ENV0_R16	ESC
+C:000f5b e10b      ldi	r16,low(ESC) 
+C:000f5c 940e 0135 call	Com0_1
+C:000f5e   +  	ENV0_R16	TAB
+C:000f5e e009      ldi	r16,low(TAB) 
+C:000f5f 940e 0135 call	Com0_1
+C:000f61 e083      	ldi	r24,3
+C:000f62 2799      	clr	r25
+C:000f63 940e 010a 	call	Send0_1
+C:000f65 e091      	ldi	r25,0x1
+C:000f66 2f59      	mov	r21,r25
+C:000f67   +  	ENV0
+          ENV01:
+C:000f67 9170 00c0 lds	r23,UCSR0A
+C:000f69 ff75      sbrs	r23,UDRE0
+C:000f6a cffc      rjmp	ENV01 
+C:000f6b 9350 00c6 sts	UDR0,r21
+C:000f6d 2788      	clr	r24
+C:000f6e 2f58      	mov	r21,r24
+C:000f6f   +  	ENV0
+          ENV01:
+C:000f6f 9170 00c0 lds	r23,UCSR0A
+C:000f71 ff75      sbrs	r23,UDRE0
+C:000f72 cffc      rjmp	ENV01 
+C:000f73 9350 00c6 sts	UDR0,r21
+          flash1:
+C:000f75 9157      	elpm	r21,Z+
+C:000f76   +  	ENV0
+          ENV01:
+C:000f76 9170 00c0 lds	r23,UCSR0A
+C:000f78 ff75      sbrs	r23,UDRE0
+C:000f79 cffc      rjmp	ENV01 
+C:000f7a 9350 00c6 sts	UDR0,r21
+C:000f7c 9701      	sbiw	r25:r24,1
+C:000f7d f7b9      	brne	flash1
+C:000f7e   +  	POPZ
+C:000f7e 91e0 0111 lds	ZL,save_z
+C:000f80 91f0 0112 lds	ZH,save_z+1
+C:000f82 9508      	ret
+         	
+          .DB     "dp",0x2,1<<EXEC
+C:000F83 64700208
+          .DW	link
+C:000f85 0f37
+          _dp:
+          .SET link=_dp
+C:000f86   +  	ENV0_R16	0x44
+C:000f86 e404      ldi	r16,low(0x44) 
+C:000f87 940e 0135 call	Com0_1
+C:000f89   +  	ENV0_R16	0x50
+C:000f89 e500      ldi	r16,low(0x50) 
+C:000f8a 940e 0135 call	Com0_1
+C:000f8c   +  	ENV0_R16	0x20
+C:000f8c e200      ldi	r16,low(0x20) 
+C:000f8d 940e 0135 call	Com0_1
+C:000f8f 2fca      	mov	YL,XL
+C:000f90 2fdb      	mov	YH,XH
+C:000f91 97ee      	sbiw	YH:YL,0x3E
+C:000f92 9722      	sbiw	YH:YL,0x02
+C:000f93   +  	ENV0_R16	ESC
+C:000f93 e10b      ldi	r16,low(ESC) 
+C:000f94 940e 0135 call	Com0_1
+C:000f96   +  	ENV0_R16	TAB
+C:000f96 e009      ldi	r16,low(TAB) 
+C:000f97 940e 0135 call	Com0_1
+C:000f99 93cd      	st	X+,YL
+C:000f9a 93dd      	st	X+,YH
+C:000f9b 2700      	clr	r16
+C:000f9c 930d      	st	X+,r16
+C:000f9d e083      	ldi	r24,3
+C:000f9e 2799      	clr	r25
+C:000f9f 940e 010a 	call	Send0_1
+C:000fa1 2755      	clr	r21
+C:000fa2   +  	ENV0
+          ENV01:
+C:000fa2 9170 00c0 lds	r23,UCSR0A
+C:000fa4 ff75      sbrs	r23,UDRE0
+C:000fa5 cffc      rjmp	ENV01 
+C:000fa6 9350 00c6 sts	UDR0,r21
+C:000fa8 e450      	ldi	r21,0x40
+C:000fa9   +  	ENV0
+          ENV01:
+C:000fa9 9170 00c0 lds	r23,UCSR0A
+C:000fab ff75      sbrs	r23,UDRE0
+C:000fac cffc      rjmp	ENV01 
+C:000fad 9350 00c6 sts	UDR0,r21
+C:000faf e400      	ldi	r16,0x40
+          _dp1:
+C:000fb0 9159      	ld	r21,Y+
+C:000fb1   +  	ENV0
+          ENV01:
+C:000fb1 9170 00c0 lds	r23,UCSR0A
+C:000fb3 ff75      sbrs	r23,UDRE0
+C:000fb4 cffc      rjmp	ENV01 
+C:000fb5 9350 00c6 sts	UDR0,r21
+C:000fb7 950a      	dec	r16
+C:000fb8 f7b9      	brne	_dp1
+C:000fb9 9508      	ret
+         	
+          .DB     "sp",0x2,1<<EXEC
+C:000FBA 73700208
+          .DW	link
+C:000fbc 0f86
+          _sp:
+          .SET link=_sp
+C:000fbd   +  	ENV0_R16	0x53
+C:000fbd e503      ldi	r16,low(0x53) 
+C:000fbe 940e 0135 call	Com0_1
+C:000fc0   +  	ENV0_R16	0x50
+C:000fc0 e500      ldi	r16,low(0x50) 
+C:000fc1 940e 0135 call	Com0_1
+C:000fc3   +  	ENV0_R16	0x20
+C:000fc3 e200      ldi	r16,low(0x20) 
+C:000fc4 940e 0135 call	Com0_1
+C:000fc6 b70d      	in	r16,SPL
+C:000fc7 2fc0      	mov	YL,r16
+C:000fc8 b70e      	in	r16,SPH
+C:000fc9 2fd0      	mov	YH,r16
+C:000fca 9621      	adiw	YH:YL,1
+C:000fcb 93cd      	st	X+,YL
+C:000fcc 93dd      	st	X+,YH
+C:000fcd 2700      	clr	r16
+C:000fce 930d      	st	X+,r16
+C:000fcf   +  	ENV0_R16	ESC
+C:000fcf e10b      ldi	r16,low(ESC) 
+C:000fd0 940e 0135 call	Com0_1
+C:000fd2   +  	ENV0_R16	TAB
+C:000fd2 e009      ldi	r16,low(TAB) 
+C:000fd3 940e 0135 call	Com0_1
+C:000fd5 e083      	ldi	r24,3
+C:000fd6 2799      	clr	r25
+C:000fd7 940e 010a 	call	Send0_1
+C:000fd9 2755      	clr	r21
+C:000fda   +  	ENV0
+          ENV01:
+C:000fda 9170 00c0 lds	r23,UCSR0A
+C:000fdc ff75      sbrs	r23,UDRE0
+C:000fdd cffc      rjmp	ENV01 
+C:000fde 9350 00c6 sts	UDR0,r21
+C:000fe0 e450      	ldi	r21,0x40
+C:000fe1   +  	ENV0
+          ENV01:
+C:000fe1 9170 00c0 lds	r23,UCSR0A
+C:000fe3 ff75      sbrs	r23,UDRE0
+C:000fe4 cffc      rjmp	ENV01 
+C:000fe5 9350 00c6 sts	UDR0,r21
+C:000fe7 e400      	ldi	r16,0x40
+          _sp1:
+C:000fe8 9159      	ld	r21,Y+
+C:000fe9   +  	ENV0
+          ENV01:
+C:000fe9 9170 00c0 lds	r23,UCSR0A
+C:000feb ff75      sbrs	r23,UDRE0
+C:000fec cffc      rjmp	ENV01 
+C:000fed 9350 00c6 sts	UDR0,r21
+C:000fef 950a      	dec	r16
+C:000ff0 f7b9      	brne	_sp1
+C:000ff1 9508      	ret
+         	
+          .DB     " ram",0x3,1<<EXEC
+C:000FF2 2072616D0308
+          .DW	link
+C:000ff5 0fbd
+          _ram:
+          .SET link=_ram
+C:000ff6   +  	ENV0_R16	0x52
+C:000ff6 e502      ldi	r16,low(0x52) 
+C:000ff7 940e 0135 call	Com0_1
+C:000ff9   +  	ENV0_R16	0x41
+C:000ff9 e401      ldi	r16,low(0x41) 
+C:000ffa 940e 0135 call	Com0_1
+C:000ffc   +  	ENV0_R16	0x4D
+C:000ffc e40d      ldi	r16,low(0x4D) 
+C:000ffd 940e 0135 call	Com0_1
+C:000fff   +  	ENV0_R16	0x20
+C:000fff e200      ldi	r16,low(0x20) 
+C:001000 940e 0135 call	Com0_1
+C:001002 91de      	ld	YH,-X
+C:001003 91ce      	ld	YL,-X
+C:001004 93cd      	st	X+,YL
+C:001005 93dd      	st	X+,YH
+C:001006 2700      	clr	r16
+C:001007 930d      	st	X+,r16
+C:001008   +  	ENV0_R16	ESC
+C:001008 e10b      ldi	r16,low(ESC) 
+C:001009 940e 0135 call	Com0_1
+C:00100b   +  	ENV0_R16	TAB
+C:00100b e009      ldi	r16,low(TAB) 
+C:00100c 940e 0135 call	Com0_1
+C:00100e e083      	ldi	r24,3
+C:00100f 2799      	clr	r25
+C:001010 940e 010a 	call	Send0_1
+C:001012 2755      	clr	r21
+C:001013   +  	ENV0
+          ENV01:
+C:001013 9170 00c0 lds	r23,UCSR0A
+C:001015 ff75      sbrs	r23,UDRE0
+C:001016 cffc      rjmp	ENV01 
+C:001017 9350 00c6 sts	UDR0,r21
+C:001019 e450      	ldi	r21,0x40
+C:00101a   +  	ENV0
+          ENV01:
+C:00101a 9170 00c0 lds	r23,UCSR0A
+C:00101c ff75      sbrs	r23,UDRE0
+C:00101d cffc      rjmp	ENV01 
+C:00101e 9350 00c6 sts	UDR0,r21
+C:001020 e400      	ldi	r16,0x40
+          _ram1:
+C:001021 9159      	ld	r21,Y+
+C:001022   +  	ENV0
+          ENV01:
+C:001022 9170 00c0 lds	r23,UCSR0A
+C:001024 ff75      sbrs	r23,UDRE0
+C:001025 cffc      rjmp	ENV01 
+C:001026 9350 00c6 sts	UDR0,r21
+C:001028 950a      	dec	r16
+C:001029 f7b9      	brne	_ram1
+C:00102a 9508      	ret
+          .DB     " eep",0x3,1<<EXEC
+C:00102B 206565700308
+          .DW	link
+C:00102e 0ff6
+          _eep:
+          .SET link=_eep
+C:00102f   +  	ENV0_R16	0x45
+C:00102f e405      ldi	r16,low(0x45) 
+C:001030 940e 0135 call	Com0_1
+C:001032   +  	ENV0_R16	0x65
+C:001032 e605      ldi	r16,low(0x65) 
+C:001033 940e 0135 call	Com0_1
+C:001035   +  	ENV0_R16	0x70
+C:001035 e700      ldi	r16,low(0x70) 
+C:001036 940e 0135 call	Com0_1
+C:001038   +  	ENV0_R16	0x20
+C:001038 e200      ldi	r16,low(0x20) 
+C:001039 940e 0135 call	Com0_1
+C:00103b 91de      	ld	YH,-X
+C:00103c 91ce      	ld	YL,-X
+C:00103d 93cd      	st	X+,YL
+C:00103e 93dd      	st	X+,YH
+C:00103f   +  	ENV0_R16	ESC
+C:00103f e10b      ldi	r16,low(ESC) 
+C:001040 940e 0135 call	Com0_1
+C:001042   +  	ENV0_R16	TAB
+C:001042 e009      ldi	r16,low(TAB) 
+C:001043 940e 0135 call	Com0_1
+C:001045 2700      	clr	r16
+C:001046 930d      	st	X+,r16
+C:001047 e083      	ldi	r24,3
+C:001048 2799      	clr	r25
+C:001049 940e 010a 	call	Send0_1
+C:00104b 2755      	clr	r21
+C:00104c   +  	ENV0
+          ENV01:
+C:00104c 9170 00c0 lds	r23,UCSR0A
+C:00104e ff75      sbrs	r23,UDRE0
+C:00104f cffc      rjmp	ENV01 
+C:001050 9350 00c6 sts	UDR0,r21
+C:001052 e450      	ldi	r21,0x40
+C:001053   +  	ENV0
+          ENV01:
+C:001053 9170 00c0 lds	r23,UCSR0A
+C:001055 ff75      sbrs	r23,UDRE0
+C:001056 cffc      rjmp	ENV01 
+C:001057 9350 00c6 sts	UDR0,r21
+C:001059 e400      	ldi	r16,0x40
+C:00105a 930d      	st	X+,r16
+C:00105b 2700      	clr	r16
+C:00105c 930d      	st	X+,r16
+C:00105d 93cd      	st	X+,YL
+C:00105e 93dd      	st	X+,YH
+C:00105f 939f      	push   r25
+C:001060 938f      	push   r24
+C:001061 940e 0736 	call	readeep
+C:001063 918f      	pop    r24
+C:001064 919f      	pop    r25
+C:001065 910e      	ld	r16,-X
+C:001066 910e      	ld	r16,-X
+C:001067 2f10      	mov	r17,r16
+          _eep1:
+C:001068 915e      	ld	r21,-X
+C:001069 935f      	push	r21
+C:00106a 950a      	dec	r16
+C:00106b f7e1      	brne	_eep1
+          _eep2:
+C:00106c 915f      	pop	r21
+C:00106d   +  	ENV0
+          ENV01:
+C:00106d 9170 00c0 lds	r23,UCSR0A
+C:00106f ff75      sbrs	r23,UDRE0
+C:001070 cffc      rjmp	ENV01 
+C:001071 9350 00c6 sts	UDR0,r21
+C:001073 951a      	dec	r17
+C:001074 f7b9      	brne	_eep2
+C:001075 9508      	ret
+          .DB     "c.",0x2,1<<EXEC
+C:001076 632E0208
+          .DW	link
+C:001078 102f
+          Cpoint:
+          .SET link=Cpoint
+C:001079 2400      	clr	r0
+C:00107a 9010 010e 	lds	r1,base
+C:00107c 902e      	ld	r2,-X
+          Cpoint0:
+C:00107d e008      	ldi	r16,0x08
+C:00107e 2466      	clr	r6
+C:00107f 2711      	clr	r17
+C:001080 2455      	clr	r5
+          Cpoint1:
+C:001081 0c22      	lsl	r2
+C:001082 1f11      	rol	r17
+C:001083 1511      	cp	r17,r1
+C:001084 f010      	brcs	Cpoint2
+C:001085 1911      	sub	r17,r1
+C:001086 9463      	inc	r6
+          Cpoint2:
+C:001087 950a      	dec	r16
+C:001088 f011      	breq	Cpoint3
+C:001089 0c66      	lsl	r6
+C:00108a cff6      	rjmp	Cpoint1
+          Cpoint3:
+C:00108b 9403      	inc	r0
+C:00108c e320      	ldi	r18,0x30
+C:00108d 0f12      	add	r17,r18
+C:00108e 331a      	cpi	r17,0x3A
+C:00108f f010      	brcs	Cpoint33
+C:001090 e027      	ldi	r18,0x07
+C:001091 0f12      	add	r17,r18
+          Cpoint33:
+C:001092 931d      	st	x+,r17
+C:001093 2c26      	mov	r2,r6
+C:001094 1461      	cp	r6,r1
+C:001095 f008      	brcs	Cpoint5
+          Cpoint4:
+C:001096 cfe6      	rjmp	Cpoint0
+          Cpoint5:
+C:001097 2d16      	mov	r17,r6
+C:001098 2916      	or	r17,r6
+C:001099 f041      	breq	Cpoint6
+C:00109a e320      	ldi	r18,0x30
+C:00109b 0f12      	add	r17,r18
+C:00109c 331a      	cpi	r17,0x3A
+C:00109d f010      	brcs	Cpoint55
+C:00109e e027      	ldi	r18,0x07
+C:00109f 0f12      	add	r17,r18
+          Cpoint55:
+C:0010a0 931d      	st	x+,r17
+C:0010a1 9403      	inc	r0
+          Cpoint6:
+C:0010a2 2d00      	mov	r16,r0
+C:0010a3 940e 0370 	call	Display1
+C:0010a5 9508      	ret
+         	
+          .DB     " .",0x1,1<<EXEC
+C:0010A6 202E0108
+          .DW	link
+C:0010a8 1079
+          point:
+          .SET link=point
+C:0010a9 2400      	clr	r0
+C:0010aa 9010 010e 	lds	r1,base
+C:0010ac 903e      	ld	r3,-X
+C:0010ad 902e      	ld	r2,-X
+          point0:
+C:0010ae e100      	ldi	r16,0x10
+C:0010af 2466      	clr	r6
+C:0010b0 2477      	clr	r7
+C:0010b1 2711      	clr	r17
+C:0010b2 2455      	clr	r5
+          point1:
+C:0010b3 0c22      	lsl	r2
+C:0010b4 1c33      	rol	r3
+C:0010b5 1f11      	rol	r17
+C:0010b6 1511      	cp	r17,r1
+C:0010b7 f010      	brcs	point2
+C:0010b8 1911      	sub	r17,r1
+C:0010b9 9463      	inc	r6
+          point2:
+C:0010ba 950a      	dec	r16
+C:0010bb f019      	breq	point3
+C:0010bc 0c66      	lsl	r6
+C:0010bd 1c77      	rol	r7
+C:0010be cff4      	rjmp	point1
+          point3:
+C:0010bf 9403      	inc	r0
+C:0010c0 e320      	ldi	r18,0x30
+C:0010c1 0f12      	add	r17,r18
+C:0010c2 331a      	cpi	r17,0x3A
+C:0010c3 f010      	brcs	point33
+C:0010c4 e027      	ldi	r18,0x07
+C:0010c5 0f12      	add	r17,r18
+          point33:
+C:0010c6 931d      	st	x+,r17
+C:0010c7 0113      	movw	r3:r2,r7:r6
+C:0010c8 2877      	or	r7,r7
+C:0010c9 f411      	brne	point4
+C:0010ca 1461      	cp	r6,r1
+C:0010cb f008      	brcs	point5
+          point4:
+C:0010cc cfe1      	rjmp	point0
+          point5:
+C:0010cd 2d16      	mov	r17,r6
+C:0010ce 2916      	or	r17,r6
+C:0010cf f041      	breq	point6
+C:0010d0 e320      	ldi	r18,0x30
+C:0010d1 0f12      	add	r17,r18
+C:0010d2 331a      	cpi	r17,0x3A
+C:0010d3 f010      	brcs	point55
+C:0010d4 e027      	ldi	r18,0x07
+C:0010d5 0f12      	add	r17,r18
+          point55:
+C:0010d6 931d      	st	x+,r17
+C:0010d7 9403      	inc	r0
+          point6:
+C:0010d8 2d00      	mov	r16,r0
+C:0010d9 940e 0370 	call	Display1
+C:0010db 9508      	ret
+         	
+          .DB     "D.",0x2,1<<EXEC
+C:0010DC 442E0208
+          .DW	link
+C:0010de 10a9
+          Double:
+          .SET link=Double
+C:0010df 2400      	clr	r0
+C:0010e0 9010 010e 	lds	r1,base
+C:0010e2 905e      	ld	r5,-X
+C:0010e3 904e      	ld	r4,-X
+C:0010e4 903e      	ld	r3,-X
+C:0010e5 902e      	ld	r2,-X
+          Double0:
+C:0010e6 e200      	ldi	r16,0x20
+C:0010e7 2466      	clr	r6
+C:0010e8 2477      	clr	r7
+C:0010e9 2488      	clr	r8
+C:0010ea 2499      	clr	r9
+C:0010eb 2711      	clr	r17
+          Double1:
+C:0010ec 0c22      	lsl	r2
+C:0010ed 1c33      	rol	r3
+C:0010ee 1c44      	rol	r4
+C:0010ef 1c55      	rol	r5
+C:0010f0 1f11      	rol	r17
+C:0010f1 1511      	cp	r17,r1
+C:0010f2 f010      	brcs	Double2
+C:0010f3 1911      	sub	r17,r1
+C:0010f4 9463      	inc	r6
+          Double2:
+C:0010f5 950a      	dec	r16
+C:0010f6 f029      	breq	Double3
+C:0010f7 0c66      	lsl	r6
+C:0010f8 1c77      	rol	r7
+C:0010f9 1c88      	rol	r8
+C:0010fa 1c99      	rol	r9
+C:0010fb cff0      	rjmp	Double1
+          Double3:
+C:0010fc 9403      	inc	r0
+C:0010fd e320      	ldi	r18,0x30
+C:0010fe 0f12      	add	r17,r18
+C:0010ff 331a      	cpi	r17,0x3A
+C:001100 f010      	brcs	Double33
+C:001101 e027      	ldi	r18,0x07
+C:001102 0f12      	add	r17,r18
+          Double33:
+C:001103 931d      	st	x+,r17
+C:001104 0113      	movw	r3:r2,r7:r6
+C:001105 0124      	movw	r5:r4,r9:r8
+C:001106 2889      	or	r8,r9
+C:001107 2887      	or	r8,r7
+C:001108 f411      	brne	Double4
+C:001109 1461      	cp	r6,r1
+C:00110a f008      	brcs	Double5
+          Double4:
+C:00110b cfda      	rjmp	Double0
+          Double5:
+C:00110c 2d16      	mov	r17,r6
+C:00110d 2916      	or	r17,r6
+C:00110e f041      	breq	Double6
+C:00110f e320      	ldi	r18,0x30
+C:001110 0f12      	add	r17,r18
+C:001111 331a      	cpi	r17,0x3A
+C:001112 f010      	brcs	Double55
+C:001113 e027      	ldi	r18,0x07
+C:001114 0f12      	add	r17,r18
+          Double55:
+C:001115 931d      	st	x+,r17
+C:001116 9403      	inc	r0
+          Double6:
+C:001117 2d00      	mov	r16,r0
+C:001118 940e 0370 	call	Display1
+C:00111a 9508      	ret
+         
+          .DB     " debug",0x5,1<<EXEC
+C:00111B 2064656275670508
+          .DW	link
+C:00111f 10df
+          debug:
+          .SET link=debug
+C:001120 940e 0f37 	call	flash
+C:001122 940e 0f86 	call	_dp
+C:001124 940e 0fbd 	call	_sp
+C:001126 2700      	clr	r16
+C:001127 930d      	st	X+,r16
+C:001128 930d      	st	X+,r16
+C:001129 940e 102f 	call	_eep
+C:00112b 2700      	clr	r16
+C:00112c 930d      	st	X+,r16
+C:00112d 9503      	inc	r16
+C:00112e 930d      	st	X+,r16	
+C:00112f 940e 0ff6 	call	_ram
+C:001131 9508      	ret
+         
+          .DB     " icode",0x5,1<<COMPILE
+C:001132 2069636F64650520
+          .DW	link
+C:001136 1120
+          Icode:
+          .SET link=Icode
+C:001137 9508      	ret
+C:001138 9632      	adiw	ZH:ZL,2
+C:001139 9508      	ret
+         	
+          .DB     "code",0x4,1<<COMPILE
+C:00113A 636F64650420
+          .DW	link
+C:00113d 1137
+          code:
+          .SET link=code
+C:00113e 9508      	ret
+C:00113f 940e 0566 	call	Word
+C:001141 940e 05fb 	call	Number1
+C:001143 2b00      	or	r16,r16
+C:001144 f019      	breq	code2
+          code1:
+C:001145 940c 0653 	jmp	Number551
+C:001147 9508      	ret
+          code2:
+C:001148 940e 06d5 	call	Execute1
+C:00114a 9508      	ret
+C:00114b   +  	ENV0_R16	0x52
+C:00114b e502      ldi	r16,low(0x52) 
+C:00114c 940e 0135 call	Com0_1
+C:00114e   +  	ENV0_R16	0x45
+C:00114e e405      ldi	r16,low(0x45) 
+C:00114f 940e 0135 call	Com0_1
+C:001151   +  	ENV0_R16	0x53
+C:001151 e503      ldi	r16,low(0x53) 
+C:001152 940e 0135 call	Com0_1
+C:001154   +  	ENV0_R16	0x43
+C:001154 e403      ldi	r16,low(0x43) 
+C:001155 940e 0135 call	Com0_1
+C:001157   +  	ENV0_R16	0x20
+C:001157 e200      ldi	r16,low(0x20) 
+C:001158 940e 0135 call	Com0_1
+C:00115a   +  	ENV0_R16	ESC
+C:00115a e10b      ldi	r16,low(ESC) 
+C:00115b 940e 0135 call	Com0_1
+C:00115d   +  	ENV0_R16	REST
+C:00115d e008      ldi	r16,low(REST) 
+C:00115e 940e 0135 call	Com0_1
+C:001160 2700      	clr	r16
+C:001161 e0f0      	ldi	ZH,high(Send_code)
+C:001162 e7e2      	ldi	ZL,low(Send_code)
+C:001163 0fee      	lsl	ZL
+C:001164 1fff      	rol	ZH
+C:001165 9105      	lpm	r16,z+
+C:001166 2f50      	mov	r21,r16
+C:001167   +  	ENV0
+          ENV01:
+C:001167 9170 00c0 lds	r23,UCSR0A
+C:001169 ff75      sbrs	r23,UDRE0
+C:00116a cffc      rjmp	ENV01 
+C:00116b 9350 00c6 sts	UDR0,r21
+          code3:
+C:00116d 930f      	push r16
+C:00116e 9155      	lpm	r21,z+
+C:00116f   +  	ENV0
+          ENV01:
+C:00116f 9170 00c0 lds	r23,UCSR0A
+C:001171 ff75      sbrs	r23,UDRE0
+C:001172 cffc      rjmp	ENV01 
+C:001173 9350 00c6 sts	UDR0,r21
+C:001175 950a      	dec	r16
+C:001176 f7b1      	brne	code3
+C:001177 9508      	ret
+         	
+         
+          .DB     " [",0x1,1<<COMPILE
+C:001178 205B0120
+          .DW	link
+C:00117a 113e
+          Hook:
+          .SET link=Hook	
+C:00117b 9508      	ret
+C:00117c 93ef      	push	ZL
+C:00117d 93ff      	push	ZH
+C:00117e 9100 010f 	lds	r16,etat
+C:001180 930f      	push	r16
+C:001181 e000      	ldi	r16,NORMAL
+C:001182 9300 010f 	sts	etat,r16
+C:001184 940e 0504 	call	Receive0
+          Hook1:
+C:001186 910f      	pop	r16
+C:001187 9300 010f 	sts	etat,r16
+C:001189 91ff      	pop	ZH
+C:00118a 91ef      	pop	ZL
+C:00118b 9508      	ret
+         	
+         
+          .DB     " ]",0x1,1<<IMMED
+C:00118C 205D0110
+          .DW	link
+C:00118e 117b
+          NHook:
+          .SET link=NHook	
+C:00118f 913f      	pop	r19
+C:001190 912f      	pop	r18
+C:001191 911f      	pop	r17
+C:001192 910f      	pop	r16
+C:001193 930f      	push	r16
+C:001194 931f      	push	r17
+C:001195 3806      	cpi	r16,low(hook1)
+C:001196 f411      	brne	NHook1
+C:001197 3111      	cpi	r17,high(hook1)
+C:001198 f059      	breq	NHook2
+          NHook1:
+C:001199   +  	ENV0_R16	0x4F
+C:001199 e40f      ldi	r16,low(0x4F) 
+C:00119a 940e 0135 call	Com0_1
+C:00119c   +  	ENV0_R16	0x4F
+C:00119c e40f      ldi	r16,low(0x4F) 
+C:00119d 940e 0135 call	Com0_1
+C:00119f   +  	ENV0_R16	0x4F
+C:00119f e40f      ldi	r16,low(0x4F) 
+C:0011a0 940e 0135 call	Com0_1
+C:0011a2 932f      	push	r18
+C:0011a3 933f      	push	r19
+          NHook2:
+C:0011a4   +  	ENV0_R16	0x4B
+C:0011a4 e40b      ldi	r16,low(0x4B) 
+C:0011a5 940e 0135 call	Com0_1
+C:0011a7   +  	ENV0_R16	0x4B
+C:0011a7 e40b      ldi	r16,low(0x4B) 
+C:0011a8 940e 0135 call	Com0_1
+C:0011aa   +  	ENV0_R16	0x4B
+C:0011aa e40b      ldi	r16,low(0x4B) 
+C:0011ab 940e 0135 call	Com0_1
+C:0011ad 9508      	ret
+         	
+         
+          .DB     " compile",0x7,1<<COMPILE
+C:0011AE 20636F6D70696C650720
+          .DW	link
+C:0011b3 118f
+          compile0:
+          .SET link=compile0
+C:0011b4 9508      	ret
+C:0011b5 940e 0566 	call	Word
+C:0011b7 940e 05b7 	call	find
+C:0011b9 2b00      	or	r16,r16
+C:0011ba f081      	breq	compile2
+C:0011bb 9100 0110 	lds	r16,type_find
+C:0011bd 3400      	cpi	r16,1<<NUM
+C:0011be f411      	brne	compile1
+C:0011bf 940c 0653 	jmp	Number55
+          compile1:
+C:0011c1 915e      	ld	r21,-X
+C:0011c2 914e      	ld	r20,-X
+C:0011c3   +  	COMPILE20
+C:0011c3 e00e      ldi	r16,0x0E
+C:0011c4 930d      st	X+,r16
+C:0011c5 e904      ldi	r16,0x94
+C:0011c6 930d      st	X+,r16
+C:0011c7 934d      st	X+,r20
+C:0011c8 935d      st	X+,r21
+C:0011c9 9634      adiw	ZH:ZL,0x04
+C:0011ca 9508      	ret
+          compile2:
+C:0011cb 940e 06d5 	call	Execute1
+C:0011cd 9508      	ret
+C:0011ce   +  	ENV0_R16	0x52
+C:0011ce e502      ldi	r16,low(0x52) 
+C:0011cf 940e 0135 call	Com0_1
+C:0011d1   +  	ENV0_R16	0x45
+C:0011d1 e405      ldi	r16,low(0x45) 
+C:0011d2 940e 0135 call	Com0_1
+C:0011d4   +  	ENV0_R16	0x53
+C:0011d4 e503      ldi	r16,low(0x53) 
+C:0011d5 940e 0135 call	Com0_1
+C:0011d7   +  	ENV0_R16	0x43
+C:0011d7 e403      ldi	r16,low(0x43) 
+C:0011d8 940e 0135 call	Com0_1
+C:0011da   +  	ENV0_R16	0x20
+C:0011da e200      ldi	r16,low(0x20) 
+C:0011db 940e 0135 call	Com0_1
+C:0011dd   +  	ENV0_R16	ESC
+C:0011dd e10b      ldi	r16,low(ESC) 
+C:0011de 940e 0135 call	Com0_1
+C:0011e0   +  	ENV0_R16	REST
+C:0011e0 e008      ldi	r16,low(REST) 
+C:0011e1 940e 0135 call	Com0_1
+C:0011e3 2700      	clr	r16
+C:0011e4 e0f0      	ldi	ZH,high(Send_compile)
+C:0011e5 e6ed      	ldi	ZL,low(Send_compile)
+C:0011e6 0fee      	lsl	ZL
+C:0011e7 1fff      	rol	ZH
+C:0011e8 9105      	lpm	r16,z+
+C:0011e9 2f50      	mov	r21,r16
+C:0011ea   +  	ENV0
+          ENV01:
+C:0011ea 9170 00c0 lds	r23,UCSR0A
+C:0011ec ff75      sbrs	r23,UDRE0
+C:0011ed cffc      rjmp	ENV01 
+C:0011ee 9350 00c6 sts	UDR0,r21
+          compile3:
+C:0011f0 930f      	push r16
+C:0011f1 9155      	lpm	r21,z+
+C:0011f2   +  	ENV0
+          ENV01:
+C:0011f2 9170 00c0 lds	r23,UCSR0A
+C:0011f4 ff75      sbrs	r23,UDRE0
+C:0011f5 cffc      rjmp	ENV01 
+C:0011f6 9350 00c6 sts	UDR0,r21
+C:0011f8 950a      	dec	r16
+C:0011f9 f7b1      	brne	compile3
+C:0011fa 9508      	ret
+         	
+          .DB     "freq",0x4,1<<EXEC
+C:0011FB 667265710408
+          .DW	link
+C:0011fe 11b4
+          Freq:
+          .SET link=Freq
+C:0011ff 2700      	clr	r16
+C:001200 9300 0081 	sts	TCCR1B,r16
+C:001202 9300 0080 	sts	TCCR1A,r16
+C:001204 9300 0082 	sts	TCCR1C,r16	; counter raisig clock
+C:001206 9300 0085 	sts	TCNT1H,r16	; reset counter 
+C:001208 9300 0084 	sts	TCNT1L,r16
+C:00120a 2788      	clr	r24		;reset extention counter
+C:00120b 2799      	clr	r25
+C:00120c e001      	ldi	r16,0x01	; interruption overflow
+C:00120d 9300 006f 	sts	TIMSK1,r16
+C:00120f b70f      	in	r16,SREG	; sauvegarde sreg
+C:001210 930f      	push	r16
+C:001211 9478      	sei
+C:001212 ecd3      	ldi	r29,0xC3
+C:001213 e5c0      	ldi	r28,0x50		
+C:001214 e002      	ldi	r16, 0x02 ;mode CTC, compare avec A
+C:001215 bd04      	out	TCCR0A , r16
+C:001216 e300      	ldi	r16, 0x30	; pour 10us
+C:001217 bd07      	out	OCR0A , r16
+C:001218 2700      	clr	r16 ;clear flags
+C:001219 bb05      	out	TIFR0 , r16
+C:00121a bd06      	out	TCNT0 , r16
+C:00121b e002      	ldi	r16, 0x02	; start timer
+C:00121c 9300 0025 	sts	TCCR0B,r16 	; autorise les interruptions
+C:00121e e007      	ldi	r16,0x07	; counter raisig clock
+C:00121f 9300 0081 	sts	TCCR1B,r16
+C:001221 940e 041f 	call	delay2		;pause 1 demi seconde
+C:001223 94f8      	cli
+C:001224 9100 0084 	lds	r16,TCNT1L
+C:001226 9110 0085 	lds	r17,TCNT1H
+C:001228 930d      	st	X+,r16
+C:001229 931d      	st	X+,r17
+C:00122a 938d      	st	X+,r24
+C:00122b 939d      	st	X+,r25
+C:00122c 910f      	pop	r16
+C:00122d bf0f      	out	SREG,r16
+C:00122e 9508      	ret
+         	
+          .DB     " cli",0x3,1<<EXEC
+C:00122F 20636C690308
+          .DW	link
+C:001232 11ff
+          Cli0:
+          .SET link=Cli0
+C:001233 94f8      	cli
+C:001234 9508      	ret
+          .DB     " sei",0x3,1<<EXEC
+C:001235 207365690308
+          .DW	link
+C:001238 1233
+          Sei0:
+          .SET link=Sei0
+C:001239 9478      	sei
+C:00123a 9508      	ret
+          .DB     " recurse",0x7,1<<compile
+C:00123B 20726563757273650720
+          .DW	link
+C:001240 1239
+          recurse:
+          .SET link=recurse
+C:001241 9508      	ret
+C:001242 9150 010b 	lds	r21,(newword+1)	;nouvelle adresse du mot encours
+C:001244 9140 010a 	lds	r20,(newword)
+C:001246   +  	COMPILE20
+C:001246 e00e      ldi	r16,0x0E
+C:001247 930d      st	X+,r16
+C:001248 e904      ldi	r16,0x94
+C:001249 930d      st	X+,r16
+C:00124a 934d      st	X+,r20
+C:00124b 935d      st	X+,r21
+C:00124c 9634      adiw	ZH:ZL,0x04
+C:00124d 9508      	ret
+          .DB     "freq_out",0x8,1<<EXEC
+C:00124E 667265715F6F75740808
+          .DW	link
+C:001253 1241
+          freq_out:
+          .SET link=freq_out
+C:001254 2700      	clr	r16	; pulse reset
+C:001255 e018      	ldi	r17,8
+C:001256 930d      	st	X+,r16
+C:001257 931d      	st	X+,r17
+C:001258 e002      	ldi	r16,0x2
+C:001259 930d      	st	X+,r16
+C:00125a e40c      	ldi	r16,SLA_W1
+C:00125b 930d      	st	X+,r16
+C:00125c 940e 0490 	call	FTwi_s
+C:00125e e240      	ldi	r20,0x20
+C:00125f 903e      	ld	r3,-X
+C:001260 902e      	ld	r2,-X
+C:001261 901e      	ld	r1,-X
+C:001262 900e      	ld	r0,-X
+          freq_out1:
+C:001263 2700      	clr	r16	; envoi frequence
+C:001264 9436      	lsr	r3
+C:001265 9427      	ror	r2
+C:001266 9417      	ror	r1
+C:001267 9407      	ror	r0
+C:001268 f408      	brcc	freq_out2
+C:001269 9503      	inc	r16
+          freq_out2:
+C:00126a 930d      	st	X+,r16
+C:00126b 6002      	sbr	r16,2
+C:00126c 930d      	st	X+,r16
+C:00126d 7f0d      	cbr	r16,2
+C:00126e 930d      	st	X+,r16
+C:00126f e003      	ldi	r16,0x3
+C:001270 930d      	st	X+,r16
+C:001271 e40c      	ldi	r16,SLA_W1
+C:001272 930d      	st	X+,r16
+C:001273 940e 0490 	call	FTwi_s
+C:001275 954a      	dec	r20
+C:001276 f799      	brne	freq_out2
+C:001277 e048      	ldi	r20,0x08
+          freq_out3:
+C:001278 2700      	clr	r16	; envoi _8 x 0
+C:001279 e012      	ldi	r17,2
+C:00127a 930d      	st	X+,r16
+C:00127b 931d      	st	X+,r17
+C:00127c e002      	ldi	r16,0x2
+C:00127d 930d      	st	X+,r16
+C:00127e e40c      	ldi	r16,SLA_W1
+C:00127f 930d      	st	X+,r16
+C:001280 940e 0490 	call	FTwi_s
+C:001282 954a      	dec	r20
+C:001283 f7a1      	brne	freq_out3
+C:001284 2700      	clr	r16
+C:001285 e014      	ldi	r17,4
+C:001286 930d      	st	X+,r16
+C:001287 931d      	st	X+,r17
+C:001288 e002      	ldi	r16,0x2
+C:001289 930d      	st	X+,r16
+C:00128a e40c      	ldi	r16,SLA_W1
+C:00128b 930d      	st	X+,r16
+C:00128c 940e 0490 	call	FTwi_s
+C:00128e 9508      	ret
+         	
+          .DB     "i2_out",0x6,1<<EXEC
+C:00128F 69325F6F75740608
+          .DW	link
+C:001293 1254
+          tout:
+          .SET link=tout
+C:001294 911e      	ld	r17,-X
+C:001295 911e      	ld	r17,-X
+C:001296 912e      	ld	r18,-X
+C:001297 912e      	ld	r18,-X
+C:001298 0f11      	lsl	r17
+C:001299 932d      	st	X+,r18
+C:00129a e001      	ldi	r16,0x1
+C:00129b 930d      	st	X+,r16
+         	;ldi	r16,SLA_W1
+C:00129c 931d      	st	X+,r17
+C:00129d 940e 0490 	call	FTwi_s
+C:00129f 9508      	ret
+         
+          .DB	"pin2",0x4,1<<EXEC
+C:0012A0 70696E320408
+          .DW	link
+C:0012a3 1294
+          Pin2:
+          .SET link=Pin2	
+C:0012a4 9498      	clz
+C:0012a5 994a      	sbic	pind,2
+C:0012a6 9418      	sez
+C:0012a7 9508      	ret
+         		
+          .DB	"pin3",0x4,1<<EXEC
+C:0012A8 70696E330408
+          .DW	link
+C:0012ab 12a4
+          Pin3:
+          .SET link=Pin3	
+C:0012ac 9498      	clz
+C:0012ad 994b      	sbic	pind,3
+C:0012ae 9418      	sez
+C:0012af 9508      	ret
+         	
+          .DB     " start",0x5,1<<EXEC
+C:0012B0 2073746172740508
+          .DW	link
+C:0012b4 12ac
+          Start0:
+          .SET link=Start0
+C:0012b5 940e 0566 	call	word
+C:0012b7 940e 05b7 	call	find
+C:0012b9 6000      	ori	r16,0
+C:0012ba f411      	brne	Start1	
+C:0012bb 930d      	st	X+,r16
+C:0012bc 930d      	st	X+,r16
+          Start1:
+C:0012bd e010      	ldi	r17,0
+C:0012be e002      	ldi	r16,0x02
+C:0012bf 930d      	st	X+,r16
+C:0012c0 931d      	st	X+,r17
+C:0012c1 e010      	ldi	r17,HIGH(atstart)
+C:0012c2 e100      	ldi	r16,LOW(atstart)
+C:0012c3 930d      	st	X+,r16
+C:0012c4 931d      	st	X+,r17
+C:0012c5 940e 0714 	call	writeep
+C:0012c7 9508      	ret	
+          Start2:
+C:0012c8 9b4a      	sbis	pind,2
+C:0012c9 9508      	ret
+C:0012ca e0d0      	ldi	YH,HIGH(atstart)
+C:0012cb e1c0      	ldi	YL,LOW(atstart )
+C:0012cc e090      	ldi	r25,0
+C:0012cd e082      	ldi	r24,0x02
+C:0012ce 938d      	st      X+,r24
+C:0012cf 939d      	st      X+,r25
+C:0012d0 93cd      	st      X+,YL
+C:0012d1 93dd      	st      X+,YH
+C:0012d2 940e 0736 	call	readeep
+C:0012d4 911e      	ld	r17,-X
+C:0012d5 911e      	ld	r17,-X
+C:0012d6 910e      	ld	r16,-X
+C:0012d7 911e      	ld	r17,-X
+C:0012d8 6010      	ori	r17,0
+C:0012d9 f011      	breq	Start3
+C:0012da 930f      	push	r16
+C:0012db 931f      	push	r17
+          Start3:	
+C:0012dc 9508      	ret
+         	
+          .DB     " restore",0x7,1<<EXEC
+C:0012DD 20726573746F72650708
+          .DW	link
+C:0012e2 12b5
+          Restore:
+          .SET link=Restore
+C:0012e3 94f8              cli
+C:0012e4 e104      	ldi	r16,0x14
+C:0012e5 e0d0      	ldi	YH,HIGH(copie)
+C:0012e6 e1c4      	ldi	YL,LOW(copie)
+C:0012e7 e0b0      	ldi	XH,HIGH(sparam)
+C:0012e8 e0a0      	ldi	XL,LOW(sparam)
+         	
+          restore1:
+C:0012e9 99f9      	sbic   EECR,EEPE
+C:0012ea cffe      	rjmp   restore1
+C:0012eb bdd2      	out	EEARH,YH
+C:0012ec bdc1      	out	EEARL,YL
+C:0012ed 9af8      	sbi	EECR,EERE
+C:0012ee 9621      	adiw	YH:YL,1
+C:0012ef e830      	ldi    r19,0x80
+          restore11:
+C:0012f0 953a      	dec	r19
+C:0012f1 f7f1      	brne	restore11
+C:0012f2 b510      	in	r17,EEDR
+          restore2:
+C:0012f3 99f9      	sbic EECR,EEPE
+C:0012f4 cffe      	rjmp restore2
+          restore3:
+C:0012f5 b727      	in	r18,SPMCSR ; controle flash pas en ecriture
+C:0012f6 fd20      	sbrc	r18, SPMEN
+C:0012f7 cffd      	rjmp	restore3
+C:0012f8 bd10      	out EEDR,r17
+C:0012f9 bdb2      	out	EEARH,XH
+C:0012fa bda1      	out	EEARL,XL
+C:0012fb 9afa      	sbi EECR,EEMPE	; Write logical one to EEMPE
+C:0012fc 9af9      	sbi EECR,EEPE	; Start eeprom write by setting EEP
+C:0012fd 9611      	adiw	XH:XL,1
+C:0012fe 950a      	dec	r16
+C:0012ff f749      	brne	restore1
+C:001300 940c 0075 	jmp    Reset
+          .DB     "forget",0x6,1<<EXEC
+C:001302 666F726765740608
+          .DW	link
+C:001306 12e3
+          Forget:
+          .SET link=Forget
+C:001307 940e 0566 	call	word
+C:001309 940e 05b7 	call	find
+C:00130b 6000      	ori	r16,0
+C:00130c f409      	brne	Forget0	
+C:00130d 9508      	ret	
+          Forget0:	
+C:00130e   +  	PUSHZ
+C:00130e 93e0 0111 sts	save_z,ZL
+C:001310 93f0 0112 sts	save_z+1,ZH
+C:001312 91fe      	ld	ZH,-X
+C:001313 91ee      	ld	ZL,-X
+C:001314 31f3      	cpi	ZH,high(Unforget)
+C:001315 f011      	breq	Forget1
+C:001316 f440      	brsh	Forget3
+C:001317 c002      	rjmp	Forget2
+          Forget1:		
+C:001318 35e7      	cpi	ZL,low(Unforget)
+C:001319 f428      	brsh	Forget3
+          Forget2:	
+C:00131a   +  	POPZ	
+C:00131a 91e0 0111 lds	ZL,save_z
+C:00131c 91f0 0112 lds	ZH,save_z+1
+C:00131e 9508      	ret
+          Forget3:	
+C:00131f b70f      	in	r16,SREG	; sauve pour si INT valide
+C:001320 930f      	push	r16
+C:001321 94f8      	cli
+C:001322 9180 0104 	lds	r24,(free_ram)
+C:001324 9190 0105 	lds	r25,(free_ram+1)
+C:001326 9680      	adiw	r25:r24,0x20
+C:001327 939d      	st	X+,r25
+C:001328 938d      	st	X+,r24
+C:001329 9100 0104 	lds	r16,(free_ram)
+C:00132b 9110 0105 	lds	r17,(free_ram+1)
+C:00132d 931d      	st	X+,r17
+C:00132e 930d      	st	X+,r16
+C:00132f 0fee      	lsl	ZL
+C:001330 1fff      	rol	ZH
+C:001331 9734      	sbiw	ZH:ZL,4
+C:001332 9035      	lpm	r3,Z+	;length of word
+C:001333 9055      	lpm	r5,Z+	;word type
+C:001334 9005      	lpm	r0,Z+	; next word
+C:001335 9015      	lpm	r1,Z+
+C:001336 9734      	sbiw	ZH:ZL,4
+C:001337 19e3      	sub	ZL,r3
+C:001338 40f0      	sbci	ZH,0
+C:001339 95f6      	lsr	ZH
+C:00133a 95e7      	ror	ZL
+C:00133b 93e0 0102 	sts	Dict,ZL
+C:00133d 93f0 0103 	sts	Dict+1,ZH
+C:00133f 9200 0100 	sts	lastword,r0
+C:001341 9210 0101 	sts	lastword+1,r1
+C:001343 93fd      	st	X+,ZH
+C:001344 93ed      	st	X+,ZL
+C:001345 921d      	st	X+,r1
+C:001346 920d      	st	X+,r0
+C:001347 e008      	ldi	r16,8	;ecrire nouvelles donnees dans eeprom
+C:001348 930d      	st	X+,r16
+C:001349 2700      	clr	r16
+C:00134a 930d      	st	X+,r16
+C:00134b 930d      	st	X+,r16		;adresse des donnees
+C:00134c 930d      	st	X+,r16
+C:00134d 940e 0714 	call	writeep
+C:00134f 910f      	pop	r16	; restaure pour si INT valide
+C:001350 bf0f      	out	SREG,r16
+C:001351   +  	POPZ	
+C:001351 91e0 0111 lds	ZL,save_z
+C:001353 91f0 0112 lds	ZH,save_z+1
+C:001355 9508      	ret	
+C:001356 cfc3      	rjmp	Forget2
+          Unforget:
+          end_of_dict:
+          .ORG	0X3E00
+         ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+C:003e00 940c 0075 	jmp	Reset
+C:003e02 940c 0075 	jmp	Reset	
+          ecrireflash:	
+C:003e04 9100 010f 	lds	r16,(etat)
+C:003e06 3005      	cpi	r16,compile
+C:003e07 f011      	breq	ecrireflash0
+C:003e08 e304      	ldi	r16,0x34
+C:003e09 9508      	ret
+          ecrireflash0:
+C:003e0a 91e0 0102 	lds	ZL,(dict)
+C:003e0c 91f0 0103 	lds	ZH,(dict+1)
+C:003e0e   +  	test_z
+C:003e0e 31f3      cpi	ZH,high(unforget)
+C:003e0f f019      breq	t_comp3
+C:003e10 f428      brcc	t_comp4
+          t_comp1:
+C:003e11 e304      ldi	r16,0x34
+C:003e12 9508      ret
+          t_comp3:
+C:003e13 35e7      cpi	ZL,low(unforget)
+C:003e14 f009      breq	t_comp4
+C:003e15 f3d8      brcs	t_comp1
+          t_comp4:
+C:003e16 7ce0      	andi	ZL,(0x100-PAGESIZE)
+C:003e17 0fee      	lsl	ZL
+C:003e18 1fff      	rol	ZH
+C:003e19 91c0 0106 	lds	YL,(DP_save)
+C:003e1b 91d0 0107 	lds	YH,(DP_save+1)
+          ecrireflash1:
+         ; Page Erase
+C:003e1d e003      	ldi	r16,(1<<PGERS) | (1<<SPMEN)
+C:003e1e 940e 3e51 	call	Do_spm
+         ; re-enable the RWW section
+C:003e20 e101      	ldi	r16,(1<<RWWSRE) | (1<<SPMEN)
+C:003e21 940e 3e51 	call	Do_spm
+         ; transfer data from RAM to Flash page buffer
+C:003e23 e410      	ldi	r17,PAGESIZE	;PAGESIZE
+          Wrloop:
+C:003e24 9009      	ld	r0,Y+
+C:003e25 9019      	ld	r1,Y+
+C:003e26 e001      	ldi	r16,(1<<SPMEN)
+C:003e27 940e 3e51 	call	Do_spm
+C:003e29 9632      	adiw	ZH:ZL,2
+C:003e2a 17ca      	cp	YL,XL
+C:003e2b f010      	brcs	Wrloop1
+C:003e2c 17db      	cp	YH,XH
+C:003e2d f480      	brcc	Wrloop2
+          Wrloop1:
+C:003e2e 951a      	dec	r17
+C:003e2f f7a1      	brne	Wrloop
+C:003e30 93ef      	push	ZL
+C:003e31 93ff      	push	ZH
+C:003e32 58e0      	subi	ZL,PAGESIZEB
+C:003e33 40f0      	sbci	ZH,0
+C:003e34 e005      	ldi	r16,(1<<PGWRT) | (1<<SPMEN)
+C:003e35 940e 3e51 	call	Do_spm
+C:003e37 e101      	ldi	r16,(1<<RWWSRE) | (1<<SPMEN)
+C:003e38 940e 3e51 	call	Do_spm
+C:003e3a 91ff      	pop	ZH
+C:003e3b 91ef      	pop	ZL
+C:003e3c 940c 3e1d 	jmp	ecrireflash1
+          Wrloop2:
+C:003e3e 93ef      	push	ZL
+C:003e3f 93ff      	push	ZH
+C:003e40 2f0e      	mov	r16,ZL
+C:003e41 770f      	andi	r16,(PAGESIZEB-1)
+C:003e42 f419      	brne	Wrloop3
+C:003e43 58e0      	subi	ZL,PAGESIZEB
+C:003e44 40f0      	sbci	ZH,0
+C:003e45 c001      	rjmp	Wrloop4
+          Wrloop3:
+C:003e46 78e0      	andi	ZL,(0x100-PAGESIZEB)
+          Wrloop4:
+C:003e47 e005      	ldi	r16,(1<<PGWRT) | (1<<SPMEN)
+C:003e48 940e 3e51 	call	Do_spm
+C:003e4a e101      	ldi	r16,(1<<RWWSRE) | (1<<SPMEN)
+C:003e4b 940e 3e51 	call	Do_spm
+C:003e4d 91ff      	pop	ZH
+C:003e4e 91ef      	pop	ZL
+C:003e4f e102      	ldi	r16,0x12
+C:003e50 9508      	ret
+          Do_spm:
+         ; check for previous SPM complete
+          Wait_spm:
+C:003e51 b727      	in	r18,SPMCSR
+C:003e52 fd20      	sbrc	r18, SPMEN
+C:003e53 cffd      	rjmp	Wait_spm
+         ; check that no EEPROM write access is present
+          Wait_ee:
+C:003e54 99f9      	sbic	EECR,EEPE
+C:003e55 cffe      	rjmp	Wait_ee
+         ; SPM timed sequence
+C:003e56 bf07      	out	SPMCSR,r16
+C:003e57 95e8      	spm
+C:003e58 9508      	ret
+
+
+Segment usage:
+   Code      :      5040 words (10080 bytes)
+   Data      :        72 bytes
+   EEPROM    :        42 bytes
+
+Assembly completed with no errors.
